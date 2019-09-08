@@ -1,0 +1,8 @@
+[1] "*****************************************************"
+[1] "User Information"
+[1] "*****************************************************"
+[1] "Project ID: NA"
+[1] "Name of investigator: NA"
+[1] "Name of investigator: NA"
+[1] "Model Used: Stochastic Model"
+[1] "################# End of User Information ##############"

@@ -1,0 +1,3985 @@
+
+R version 3.4.3 (2017-11-30) -- "Kite-Eating Tree"
+Copyright (C) 2017 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+[Previously saved workspace restored]
+
+> #Loading the library
+> #Software Name: uCARE Chem Suit Version 0.1
+> #Authors: Saurav Bhaskar Saha, Vipul Gupta, Pramod Wasudeo Ramteke
+> #Details: The script takes sdf file as input and produces output through 
+> #		  several tabs viz. Drug Chemical Properties, 
+> 
+> library("shiny")
+> library("ChemmineR")
+> #library("circlize")
+> library("ape")
+> 
+> rm(list = ls())
+> 
+> ############################# UI File #########################
+> # UI Declaration
+> ui = fluidPage(
++   headerPanel("uCARE Chem Suite V.01"),
++   #Title of application
++   titlePanel(h2("")
++              #h2("uCARE Chem Suit V.01 ", align="center"), tags$img(src='images/logo1.png', height=125, width=285)
++   ),
++   
++   #Side Bar Layout
++   sidebarLayout(
++     
++     #Side Panel asking for scientist and Project details   
++     sidebarPanel(
++       
++       textInput("projID","Enter the Project ID", value = "NA"),
++       textInput("name","Enter your name", value = "NA"),
++       textInput("email","Enter your Institutional email id (Required)", value = 'NA'),
++       textAreaInput("com","Comments/Notes", value = "NA"),
++       radioButtons("application","Application Type",list("Visualization", "Clustering")),
++       radioButtons("model","Model Type",list("Deterministic Model", "Stochastic Model")),
++       fileInput('file', "Choose drug SDF file to start project",
++                 accept='.sdf', placeholder = "No file selected"),
++       "Date:", date(),br()
++       ),
++     
++     #Main Panel to print    
++     mainPanel(uiOutput('home') )
++   )
++ )
+> 
+> ############################# Server File #########################
+> server = function(input, output) {
++   
++   #Extracting Molecular Formula of drug SDF file
++   output$mf = renderTable({
++     inFile <- input$file
++     if (is.null(inFile))
++       return(NULL)
++     data.frame(MF=MF(read.SDFset(inFile$datapath)[[1]]), MW=MW(read.SDFset(inFile$datapath)[[1]]))
++   }, 
++   include.rownames=TRUE)	
++   
++   ################################################################
++   #Extraction of model Type
++   output$mymodel <- renderText(input$model)
++   
++   #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ 
++   #Extracting Atomblock of Drug SDF File
++   output$mytable = renderTable({
++     inFile <- input$file
++     if (is.null(inFile))
++       return(NULL)
++     atomblock(read.SDFset(inFile$datapath)[[1]])
++   }, 
++   include.rownames=TRUE, include.colnames=TRUE)
++   
++   #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
++   #Extracting Bond block of Drug SDF File
++   output$bondblock = renderTable({
++     inFile <- input$file
++     if (is.null(inFile))
++       return(NULL)
++     bondblock(read.SDFset(inFile$datapath)[[1]])
++   }, 
++   include.rownames=TRUE, include.colnames=TRUE)
++   
++   #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
++   #Extracting Ring attribute of Drug SDF File
++   output$ring = renderTable({
++     inFile <- input$file
++     if (is.null(inFile))
++       return(NULL)
++     rings(read.SDFset(inFile$datapath)[[1]],type="count",upper=1000, arom=TRUE)
++   }, 
++   include.rownames=TRUE, include.colnames=FALSE)
++   
++   #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
++   #Extracting Bond matrix of Drug SDF File
++   output$bmatrix = renderTable({
++     inFile <- input$file
++     if (is.null(inFile))
++       return(NULL)
++     conMA(read.SDFset(inFile$datapath)[[1]], exclude=c("H"))
++   }, 
++   include.rownames=TRUE,include.colnames=TRUE)
++   
++   #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
++   #Extracting Ring structure attribute of Drug SDF File
++   output$rstructure = renderTable({
++     inFile <- input$file
++     if (is.null(inFile))
++       return(NULL)
++     rc <- rings(read.SDFset(inFile$datapath)[[1]], upper=Inf, type="all", arom=TRUE, inner=FALSE)  
++     
++     rc_df<- c(rc$RINGS[seq(from= 1, to = length(rc$RINGS))])
++     rc_df <- as.character(rc_df)
++     rc_df[rc_df==""] <- "NA"
++     rc_df <- as.factor(rc_df)
++     rc_df
++   }, 
++   include.rownames=TRUE, include.colnames=FALSE)
++   
++   #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
++   #Extracting Number of Ring in Drug SDF File
++   output$rnum = renderTable({
++     inFile <- input$file
++     if (is.null(inFile))
++       return(NULL)
++     rc <- rings(read.SDFset(inFile$datapath)[[1]], upper=Inf, type="all", arom=TRUE, inner=FALSE)  
++     rc[2]
++   }, 
++   include.rownames=TRUE)
++   
++   #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
++   #Extracting chemical structure of drug SDF file
++   output$img = renderPlot({
++     inFile <- input$file
++     if (is.null(inFile))
++       return(NULL)
++     plot(read.SDFset(inFile$datapath)[[1]], print=FALSE, atomnum=TRUE, no_print_atoms="H")
++   })	  
++   
++   #########################################################################
++   ###$$$$$$$$$$$$$$$$$$$$$$$$$ Rule based analysis $$$$$$$$$$$$$$$$$$$$$###
++   #########################################################################
++   
++   output$dclass = renderTable({
++     inFile <- input$file
++     if (is.null(inFile))
++       return(NULL)
++     ac <- atomcountMA(read.SDFset(inFile$datapath)[[1]], addH=FALSE) 
++     
++     ################################ 
++     #Extraction of Chemical features
++     ################################
++     
++     #Carbon Content
++     carbon <- reactive({
++       if (("C" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"C"]
++     })
++     
++     #Hydrogen Content
++     hydrogen <- reactive({
++       if (("H" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"H"]
++     })
++     
++     #Oxygen Content
++     oxygen <- reactive({
++       if (("O" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"O"]
++     })
++     
++     #Nitrogen Content
++     nitrogen <- reactive({
++       if (("N" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"N"]
++     })
++     
++     #Chlorine Content
++     chlorine <- reactive({
++       if (("Cl" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"Cl"]
++     })
++     
++     #Sulfur Content
++     sulfur <- reactive({
++       if (("S" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"S"]
++     })
++     
++     #Bromium Content
++     bromium <- reactive({
++       if (("Br" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"Br"]
++     })
++     
++     #Fluorine Content
++     fluorine <- reactive({
++       if (("F" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"F"]
++     })
++     
++     ############################# 
++     # Extraction of Ring features
++     #############################
++     
++     ro <- rings(read.SDFset(inFile$datapath)[[1]],type="count",upper=1000, arom=TRUE) 
++     rings <-  rings(read.SDFset(inFile$datapath)[[1]], upper=Inf, type="all", arom=TRUE, inner=FALSE) 
++     
++     #Quinolone condition
++     quin<- reactive({
++       
++       aromatic_rings<- list()
++       aromatic_rings_final<- list()
++       
++       aliphatic_rings<- list()
++       aliphatic_rings_final<- list()
++       
++       intersect_rings<- list()
++       #intersect_rings_final<- list()
++       
++       for(i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]==TRUE)
++         {
++           aromatic_rings<- rings$RINGS[i]
++           aromatic_rings_final<- rbind(aromatic_rings_final, aromatic_rings)
++           
++         }
++       }
++       
++       for(i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]==FALSE)
++         {
++           aliphatic_rings<- rings$RINGS[i]
++           aliphatic_rings_final<- rbind(aliphatic_rings_final, aliphatic_rings)
++           
++         }
++       }
++       
++       quin<-0 
++       for(i in 1:length(aromatic_rings_final))
++       {
++         for(j in 1:length(aromatic_rings_final))
++         {
++           intersect_rings<-Reduce(intersect, list(aromatic_rings_final[[i]], aromatic_rings_final[[j]]))
++           if(length(intersect_rings)==2)
++           {
++             quin<-1
++           }
++         }
++       }
++       quin 
++       
++     })
++     
++     #Whether Aromatic ring is present or not
++     ring_p_or_a<- reactive({
++       for (i in 1: length(rings$AROMATIC)){
++         if(rings$AROMATIC[[i]]=='TRUE' )
++         {
++           
++           j<-1
++         }
++       }
++       j
++       
++     })
++     
++     #$Acquisition of conditions for sulfonamide
++     sul_matrix<- reactive({ # Sulfur with two double bonded oxygen = TRUE or Not
++       inFile <- input$file
++       if (is.null(inFile))
++         return(NULL)
++       
++       matrix<-  as.data.frame(conMA(read.SDFset(inFile$datapath)[[1]], exclude=c("H")))
++       rowname_sul <- row.names(matrix)
++       colname_sul <- colnames(matrix)
++       row_sul_elements<-  data.frame(strsplit(rowname_sul,"_"))[1,]
++       
++       #Acquisition of Sulfur indices
++       sul_index_S <- list() 
++       sul_index_current_S<- list()
++       
++       for(i in 1:length(row_sul_elements)){
++         if(row_sul_elements[i]== 'S')
++         {
++           sul_index_current_S <- i
++           sul_index_S <- rbind(sul_index_S,sul_index_current_S)
++         }
++         
++       }
++       
++       #Acquisition of Oxygen indices
++       sul_index_O <- list() 
++       sul_index_current_O<- list()
++       
++       for(i in 1:length(row_sul_elements)){
++         if(row_sul_elements[i]== 'O')
++         {
++           sul_index_current_O <- i
++           sul_index_O <- rbind(sul_index_O,sul_index_current_O)
++         }
++       }
++       
++       output<- list()
++       output_final<- list()
++       for(i in 1: length(sul_index_S[,1]))
++       {
++         l<-0
++         for(j in 1: length(sul_index_O[,1]))
++         {
++           a<- sul_index_S[,1][i]
++           b<- sul_index_O[,1][j]
++           if(matrix[a$sul_index_current_S[1],b$sul_index_current_O]==2)
++           {
++             l<-l+2
++           }
++         }
++         output<- l
++         output_final<- rbind(output_final,output)
++       } 
++       
++       for(i in 1: length(output_final))
++       {
++         if(output_final[i]==4)
++         {
++           k<-4
++         }
++       }
++       k
++     })
++     
++     #Acquisition of Carbon number in the aromatic ring of nitrofurans
++     ring_nitrofuran_C<- reactive({
++       
++       top1<- list()
++       top1_0<- list()
++       for (i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]== TRUE)
++         {
++           X <- list(rings$RINGS[i])[[1]][[1]]
++           
++           if(length(X)==5){
++             Y <- data.frame(strsplit(X,"_"))[1,]
++             Z <- rowSums(Y == "C")
++             J <- rowSums(Y== "O")
++             
++             output_O<- J[[1]]
++             output_C<- Z[[1]]
++             
++             top<- as.data.frame(output_C)
++             top_O<- as.data.frame(output_O)
++             
++             top1<- rbind(top1,top)
++             top1_0<- rbind(top1_0, top_O)
++             
++           }
++         }
++       }
++       
++       for(j in 1: ncol(top1))
++       {
++         if(top1[j]== 4 && top1_0[j]==1)
++         {k<-4}                               
++       }
++       k 
++     })
++     
++     #Acquisition of Carbon content in aliphatic rings
++     ring_C<- reactive({
++       top1<- list()
++       for (i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]== FALSE)
++         {
++           X <- list(rings$RINGS[i])[[1]][[1]]
++           Y <- data.frame(strsplit(X,"_"))[1,]
++           Z <- rowSums(Y == "C")
++           
++           output_C<- Z[[1]]
++           top<- as.data.frame(output_C)
++           top1<- rbind(top1,top)
++         }
++       }
++       for(j in 1: ncol(top1))
++       {
++         if(top1[j]== 3)
++         {k<-3}
++       }
++       k })
++     
++     #Acquisition of Nitrogen content in aliphatic rings
++     ring_N<- reactive({
++       
++       top1_N<- list()
++       for (i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]== FALSE)
++         {
++           X <- list(rings$RINGS[i])[[1]][[1]]
++           Y <- data.frame(strsplit(X,"_"))[1,]
++           Z <- rowSums(Y == "N")
++           
++           output_N<- Z[[1]]
++           top_N<- as.data.frame(output_N)
++           top1_N<- rbind(top1_N,top_N)
++         }
++       }
++       for(j in 1: ncol(top1_N))
++       {
++         if(top1_N[j]== 1)
++         {k<-1}
++       }
++       k})
++     
++     #Total ring
++     total_ring <- reactive({
++       if(is.null(ro[1]))
++         return(NULL)
++       ro[1]
++     }) 
++     
++     #Aromatic ring
++     aromatic_ring <- reactive({
++       if(is.null(ro[2]))
++         return(NULL)
++       ro[2]
++     }) 	  
++     
++     #$$$$$$$$$$$$$$$$$$$$$$$$$$$ Prediction Rules for Drug classification starts here $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$#	  
++     
++     #Rule for Acriflavine
++     if(carbon() ==27 && chlorine() ==1 && hydrogen() == 25 && nitrogen() == 6 && total_ring()==12 && aromatic_ring() ==12){
++       Drug_Name<- 'Acriflavine'
++       PubChem_ID<- '443101'
++       acriflavine<- data.frame(Drug_Name,PubChem_ID)
++     } 
++     
++     #Rule for Aminocoumarin
++     else if(carbon() ==31 && hydrogen() == 36 && nitrogen()==2 && oxygen()==11 && total_ring()== 5 && aromatic_ring()==4)
++     {
++       Drug_Name<- 'Aminocoumarin'
++       PubChem_ID<- '54675769'
++       Aminocoumarin<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Anisole
++     else if (carbon()== 14 && hydrogen() == 18 && nitrogen() == 4 && oxygen() == 3 && total_ring() == aromatic_ring())
++     {
++       Drug_Name<- 'Anisole'
++       PubChem_ID<- '5578'
++       Anisole<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Anthracycline
++     else if(carbon() == 27 && hydrogen() >= 29 && oxygen() ==10  && nitrogen() ==1 && chlorine() ==0 && total_ring() ==11&& aromatic_ring() >=2 ){
++       Drug_Name<- 'Anthracycline'
++       PubChem_ID<- '30323'
++       Anthracycline<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Benzalkonium
++     else if(bromium()==1&& carbon() == 21 && hydrogen() >= 38 && oxygen() ==0  && nitrogen() ==1 && chlorine() ==0 && total_ring() ==1 && aromatic_ring() ==1 ){
++       Drug_Name<- 'Benzalkonium'
++       PubChem_ID<- '23705'
++       Benzalkonium<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Chloramphenicol
++     else if(carbon() == 11 && hydrogen() == 12 && oxygen() ==5  && nitrogen() ==2 && chlorine() ==2 && total_ring() ==1 && aromatic_ring() ==1 ){
++       Drug_Name<- 'Chloramphenicol'
++       PubChem_ID<- '5959'
++       Chloramphenicol<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Florfenicol
++     else if(carbon() != 0 && hydrogen() != 0 && chlorine() !=0 && fluorine() !=0 && nitrogen() !=0 && oxygen() !=0 && sulfur() !=0    && total_ring() ==1 && aromatic_ring() ==1 ){
++       Drug_Name<- 'Florfenicol'
++       PubChem_ID<- '114811'
++       Florfenicol<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Rhodamine
++     else if(carbon() == 28 && hydrogen() == 31 && chlorine() ==1 && fluorine() ==0 && nitrogen() ==2 && oxygen() ==3 && sulfur() ==0    && total_ring() ==7 && aromatic_ring() ==7 ){
++       Drug_Name<- 'Rhodamine'
++       PubChem_ID<- '6694'
++       Rhodamine<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Thiolactomycin
++     else if(carbon() == 11 && hydrogen() == 14 && chlorine() ==0 && fluorine() ==0 && nitrogen() ==0 && oxygen() ==2 && sulfur() ==1    && total_ring() ==1 && aromatic_ring() ==0 ){
++       Drug_Name<- 'Thiolactomycin'
++       PubChem_ID<- '445629'
++       Thiolactomycin<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Beta Lactam
++     else if(carbon() >= 12 && carbon() <=23 && hydrogen() >= 16 && hydrogen() <= 27 && oxygen() >=4 && oxygen() <=9 && nitrogen() >=2 && nitrogen() <=8 && sulfur() >=1 && sulfur() <=3 && ring_C() ==3 && ring_N()==1){
++       Drug_Name<- c('Amoxicillin','Ampicillin','Aztreonam','Cefalotin','Cefepime',
++                     'Cefoselis','Cefotaxime','Cefoxitin','Cefpirome','Ceftazidime',
++                     'Cefradine','Cefuroxime','Ceftriaxone','Ceftiofur','Ertapenem',
++                     'Imipenem','Meropenem','Moxalactam','Penicillin G','Piperacillin',
++                     'Ticarcillin'
++       )
++       PubChem_ID<- c('33613','6249','5742832','6024','5479537','5748845','5742673','441199',
++                      '5479539','5481173','38103','5479529','5479530','6328657','150610','104838','441130',
++                      '47499','5904','43672','36921')
++       Beta_Lactam<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Sulfonamide
++     else if(carbon() != 0 && hydrogen() != 0 && oxygen() != 0 && nitrogen() !=0 && sulfur() !=0 && sul_matrix() == 4 && ring_p_or_a() == 1){
++       Drug_Name<- c('Sulfadiazine','Sulfamethoxazole')
++       PubChem_ID<- c('5215','5329')
++       Sulfonamide<- data.frame(Drug_Name,PubChem_ID)
++       
++     }
++     
++     #Rule for Fluoroquinolone
++     else if(carbon() != 0 && hydrogen() != 0 && oxygen() == 3 && nitrogen() ==3 && fluorine() !=0 && quin()==1){
++       Drug_Name<- c('Ciprofloxacin','Sitafloxacin','Norfloxacin')
++       PubChem_ID<- c('2764','461399','4539')
++       Fluoroquinolone<- data.frame(Drug_Name,PubChem_ID)
++       
++     }
++     
++     #Rule for Quinolone
++     else if(carbon() != 0 && hydrogen() != 0 && oxygen() == 3 && nitrogen() ==2 && fluorine() ==0 && quin()==1 ){
++       Drug_Name<- 'Nalidixic Acid'
++       PubChem_ID<- '4421'
++       Quinolone<- data.frame(Drug_Name,PubChem_ID)
++       
++     }
++     
++     #Rule for Polyketide_Erythromycin
++     else if(carbon() == 37 && hydrogen() == 67 && nitrogen() ==1 && oxygen() == 13 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++       PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++       Polyketide_Erythromycin<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Polyketide_Clarithromycin
++     else if(carbon() == 38 && hydrogen() == 69 && nitrogen() ==1 && oxygen() == 13 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++       PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++       Polyketide_Erythromycin<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Polyketide_Cethromycin
++     else if(carbon() == 42 && hydrogen() == 59 && nitrogen() ==3 && oxygen() == 10 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++       PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++       Polyketide_Erythromycin<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Polyketide_Telithromycin
++     else if(carbon() == 43 && hydrogen() == 65 && nitrogen() ==5 && oxygen() == 10 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++       PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++       Polyketide_Erythromycin<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Polyketide_Rifampin
++     else if(carbon() == 43 && hydrogen() == 58 && nitrogen() ==4 && oxygen() == 12 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++       PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++       Polyketide_Erythromycin<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Polyketide_Tetracycline
++     else if(carbon() == 22 && hydrogen() == 24 && nitrogen() == 2 && oxygen() == 8 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++       PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++       Polyketide_Erythromycin<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Polyketide_Minocycline
++     else if(carbon() == 23 && hydrogen() == 27 && nitrogen() == 3 && oxygen() == 7 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++       PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++       Polyketide_Erythromycin<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Peptide drug Bicyclomycin (C12H18N2O7)
++     else if(carbon()==12 && hydrogen()==18 && nitrogen()==2 && oxygen()==7){
++       Drug_Name<- c('Bicyclomycin','Polymyxin B')
++       PubChem_ID<- c('426058','49800004')
++       Peptide_drug_Bicyclomycin<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Peptide drug Polymyxin B (C56H100N16O17S)
++     else if(carbon()==56 && hydrogen()==98 && nitrogen()==16 && oxygen()==13){
++       Drug_Name<- c('Bicyclomycin','Polymyxin B')
++       PubChem_ID<- c('426058','49800004')
++       Peptide_drug_Bicyclomycin<- data.frame(Drug_Name,PubChem_ID)
++     }	
++     
++     #Rule for Aminoglycoside
++     else if(carbon() != 0 && hydrogen() >= 2 * oxygen() && nitrogen() !=0 && chlorine() ==0){
++       Drug_Name<- c('Apramycin','Gentamicin','Hygromycin B','Kanamycin','Neomycin','Puromycin','Streptomycin','Tobramycin')
++       PubChem_ID<- c('3081545','3467','35766','6032','8378','439530','19649','36294')
++       Aminoglycoside<- data.frame(Drug_Name,PubChem_ID)
++     }
++     
++     #Rule for Nitrofurans
++     else if(nitrogen() !=0 && ring_nitrofuran_C() ==4){
++       Drug_Name<- 'Nitrofurantoin'
++       PubChem_ID<- '6604200'
++       Nitrofurans<- data.frame(Drug_Name,PubChem_ID)
++     } 
++     
++     
++     
++     #Rule for Polyketide
++     
++     
++     else 
++       "The drug is not found in the list! Please use Stochastic model"
++     
++   }, 
++   include.rownames=FALSE)
++   
++   
++   
++   #$$$$$$$$$$$$$$$$$$$$$$$$$$$ Prediction Rules Ends here $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$#	 
++   
++   
++   ########################################################################
++   ################################ Drug Class classification #############
++   ########################################################################
++   
++   
++   output$cclass = renderTable({
++     inFile <- input$file
++     if (is.null(inFile))
++       return(NULL)
++     ac <- atomcountMA(read.SDFset(inFile$datapath)[[1]], addH=FALSE) 
++     
++     ################################ 
++     #Extraction of Chemical features
++     ################################
++     
++     #Carbon Content
++     carbon <- reactive({
++       if (("C" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"C"]
++     })
++     
++     #Hydrogen Content
++     hydrogen <- reactive({
++       if (("H" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"H"]
++     })
++     
++     #Oxygen Content
++     oxygen <- reactive({
++       if (("O" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"O"]
++     })
++     
++     #Nitrogen Content
++     nitrogen <- reactive({
++       if (("N" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"N"]
++     })
++     
++     #Chlorine Content
++     chlorine <- reactive({
++       if (("Cl" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"Cl"]
++     })
++     
++     #Sulfur Content
++     sulfur <- reactive({
++       if (("S" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"S"]
++     })
++     
++     #Bromium Content
++     bromium <- reactive({
++       if (("Br" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"Br"]
++     })
++     
++     #Fluorine Content
++     fluorine <- reactive({
++       if (("F" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"F"]
++     })
++     
++     
++     ############################# 
++     # Extraction of Ring features
++     #############################
++     
++     
++     ro <- rings(read.SDFset(inFile$datapath)[[1]],type="count",upper=1000, arom=TRUE) 
++     rings <-  rings(read.SDFset(inFile$datapath)[[1]], upper=Inf, type="all", arom=TRUE, inner=FALSE) 
++     
++     #Quinolone condition
++     quin<- reactive({
++       aromatic_rings<- list()
++       aromatic_rings_final<- list()
++       
++       aliphatic_rings<- list()
++       aliphatic_rings_final<- list()
++       
++       intersect_rings<- list()
++       #intersect_rings_final<- list()
++       
++       
++       for(i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]==TRUE)
++         {
++           aromatic_rings<- rings$RINGS[i]
++           aromatic_rings_final<- rbind(aromatic_rings_final, aromatic_rings)
++           
++         }
++       }
++       
++       for(i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]==FALSE)
++         {
++           aliphatic_rings<- rings$RINGS[i]
++           aliphatic_rings_final<- rbind(aliphatic_rings_final, aliphatic_rings)
++           
++         }
++       }
++       
++       quin<-0 
++       for(i in 1:length(aromatic_rings_final))
++       {
++         for(j in 1:length(aromatic_rings_final))
++         {
++           intersect_rings<-Reduce(intersect, list(aromatic_rings_final[[i]], aromatic_rings_final[[j]]))
++           if(length(intersect_rings)==2)
++           {
++             quin<-1
++           }
++         }
++       }
++       quin 
++       
++     })
++     
++     #Whether Aromatic ring is present or not
++     ring_p_or_a<- reactive({
++       for (i in 1: length(rings$AROMATIC)){
++         if(rings$AROMATIC[[i]]=='TRUE' )
++         {
++           
++           j<-1
++         }
++       }
++       j
++       
++     })
++     
++     #$Acquisition of conditions for sulfonamide
++     
++     sul_matrix<- reactive({
++       inFile <- input$file
++       if (is.null(inFile))
++         return(NULL)
++       
++       matrix<-  as.data.frame(conMA(read.SDFset(inFile$datapath)[[1]], exclude=c("H")))
++       rowname_sul <- row.names(matrix)
++       colname_sul <- colnames(matrix)
++       row_sul_elements<-  data.frame(strsplit(rowname_sul,"_"))[1,]
++       
++       #Acquisition of Sulfur indices
++       sul_index_S <- list() 
++       sul_index_current_S<- list()
++       
++       for(i in 1:length(row_sul_elements)){
++         if(row_sul_elements[i]== 'S')
++         {
++           sul_index_current_S <- i
++           sul_index_S <- rbind(sul_index_S,sul_index_current_S)
++         }
++         
++       }
++       
++       #Acquisition of Oxygen indices
++       sul_index_O <- list() 
++       sul_index_current_O<- list()
++       
++       for(i in 1:length(row_sul_elements)){
++         if(row_sul_elements[i]== 'O')
++         {
++           sul_index_current_O <- i
++           sul_index_O <- rbind(sul_index_O,sul_index_current_O)
++         }
++         
++       }
++       
++       output<- list()
++       output_final<- list()
++       for(i in 1: length(sul_index_S[,1]))
++       {
++         l<-0
++         for(j in 1: length(sul_index_O[,1]))
++         {
++           a<- sul_index_S[,1][i]
++           b<- sul_index_O[,1][j]
++           if(matrix[a$sul_index_current_S[1],b$sul_index_current_O]==2)
++           {
++             l<-l+2
++           }
++           
++         }
++         output<- l
++         output_final<- rbind(output_final,output)
++       } 
++       
++       for(i in 1: length(output_final))
++       {
++         if(output_final[i]==4)
++         {
++           k<-4
++         }
++         
++       }
++       k
++       
++     })
++     
++     #Acquisition of Carbon number in the aromatic ring of nitrofurans
++     ring_nitrofuran_C<- reactive({
++       
++       top1<- list()
++       top1_0<- list()
++       for (i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]== TRUE)
++         {
++           X <- list(rings$RINGS[i])[[1]][[1]]
++           
++           if(length(X)==5){
++             Y <- data.frame(strsplit(X,"_"))[1,]
++             Z <- rowSums(Y == "C")
++             J <- rowSums(Y== "O")
++             
++             output_O<- J[[1]]
++             output_C<- Z[[1]]
++             
++             top<- as.data.frame(output_C)
++             top_O<- as.data.frame(output_O)
++             
++             top1<- rbind(top1,top)
++             top1_0<- rbind(top1_0, top_O)
++             
++           }
++           
++         }
++       }
++       
++       for(j in 1: ncol(top1))
++       {
++         if(top1[j]== 4 && top1_0[j]==1)
++         {k<-4}                               
++       }
++       k 
++       
++     })
++     
++     
++     #Acquisition of Carbon content in aliphatic rings
++     ring_C<- reactive({
++       
++       top1<- list()
++       for (i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]== FALSE)
++         {
++           X <- list(rings$RINGS[i])[[1]][[1]]
++           Y <- data.frame(strsplit(X,"_"))[1,]
++           Z <- rowSums(Y == "C")
++           
++           output_C<- Z[[1]]
++           top<- as.data.frame(output_C)
++           top1<- rbind(top1,top)
++         }
++       }
++       for(j in 1: ncol(top1))
++       {
++         if(top1[j]== 3)
++         {k<-3}
++       }
++       k })
++     
++     
++     #Acquisition of Nitrogen content in aliphatic rings
++     ring_N<- reactive({
++       
++       top1_N<- list()
++       for (i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]== FALSE)
++         {
++           X <- list(rings$RINGS[i])[[1]][[1]]
++           Y <- data.frame(strsplit(X,"_"))[1,]
++           Z <- rowSums(Y == "N")
++           
++           output_N<- Z[[1]]
++           top_N<- as.data.frame(output_N)
++           top1_N<- rbind(top1_N,top_N)
++         }
++       }
++       for(j in 1: ncol(top1_N))
++       {
++         if(top1_N[j]== 1)
++         {k<-1}
++       }
++       k})
++     
++     #Total ring
++     total_ring <- reactive({
++       if(is.null(ro[1]))
++         return(NULL)
++       ro[1]
++     }) 
++     
++     #Aromatic ring
++     aromatic_ring <- reactive({
++       if(is.null(ro[2]))
++         return(NULL)
++       ro[2]
++     }) 	  
++     
++     
++     #$$$$$$$$$$$$$$$$$$$$$$$$$$$ Prediction Rules for Drug classification starts here $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$#	  
++     
++     #Rule for Acriflavine
++     if(carbon() ==27 && chlorine() ==1 && hydrogen() == 25 && nitrogen() == 6 && total_ring()==12 && aromatic_ring() ==12){
++       print(paste("The Drug is likely to be Acriflavine"))
++     } 
++     
++     #Rule for Aminocoumarin
++     else if(carbon() ==31 && hydrogen() == 36 && nitrogen()==2 && oxygen()==11 && total_ring()== 5 && aromatic_ring()==4)
++     {
++       print(paste("The Drug is likely to be Aminocoumarin"))
++     }
++     
++     #Rule for Anisole
++     else if (carbon()== 14 && hydrogen() == 18 && nitrogen() == 4 && oxygen() == 3 && total_ring() == aromatic_ring())
++     {
++       print(paste("The Drug is likely to be Anisole"))
++     }
++     
++     #Rule for Anthracycline
++     else if(carbon() == 27 && hydrogen() >= 29 && oxygen() ==10  && nitrogen() ==1 && chlorine() ==0 && total_ring() ==11&& aromatic_ring() >=2 ){
++       print(paste("The Drug is likely to be Anthracycline"))
++     }
++     
++     #Rule for Benzalkonium
++     else if(bromium()==1&& carbon() == 21 && hydrogen() >= 38 && oxygen() ==0  && nitrogen() ==1 && chlorine() ==0 && total_ring() ==1 && aromatic_ring() ==1 ){
++       print(paste("The Drug is likely to be Benzalkonium"))
++     }
++     
++     #Rule for Chloramphenicol
++     else if(carbon() == 11 && hydrogen() == 12 && oxygen() ==5  && nitrogen() ==2 && chlorine() ==2 && total_ring() ==1 && aromatic_ring() ==1 ){
++       print(paste("The Drug is Chloramphenicol"))
++     }
++     
++     #Rule for Florfenicol
++     else if(carbon() != 0 && hydrogen() != 0 && chlorine() !=0 && fluorine() !=0 && nitrogen() !=0 && oxygen() !=0 && sulfur() !=0    && total_ring() ==1 && aromatic_ring() ==1 ){
++       print(paste("The Drug is likely to be Florfenicol"))
++     }
++     
++     #Rule for Rhodamine
++     else if(carbon() == 28 && hydrogen() == 31 && chlorine() ==1 && fluorine() ==0 && nitrogen() ==2 && oxygen() ==3 && sulfur() ==0    && total_ring() ==7 && aromatic_ring() ==7 ){
++       print(paste("The Drug is likely to be Rhodamine"))
++     }
++     
++     #Rule for Thiolactomycin
++     else if(carbon() == 11 && hydrogen() == 14 && chlorine() ==0 && fluorine() ==0 && nitrogen() ==0 && oxygen() ==2 && sulfur() ==1    && total_ring() ==1 && aromatic_ring() ==0 ){
++       print(paste("The Drug is likely to be Thiolactomycin"))
++     }
++     
++     #Rule for Beta Lactam
++     else if(carbon() >= 12 && carbon() <=23 && hydrogen() >= 16 && hydrogen() <= 27 && oxygen() >=4 && oxygen() <=9 && nitrogen() >=2 && nitrogen() <=8 && sulfur() >=1 && sulfur() <=3 && ring_C() ==3 && ring_N()==1){
++       print(paste("The Drug is likely to be Beta Lactam"))
++     }
++     
++     #Rule for Sulfonamide
++     else if(carbon() != 0 && hydrogen() != 0 && oxygen() != 0 && nitrogen() !=0 && sulfur() !=0 && sul_matrix() == 4 && ring_p_or_a() == 1){
++       print(paste("The Drug is likely to be Sulfonamide"))
++     }
++     
++     
++     #Rule for Fluoroquinolone
++     else if(carbon() != 0 && hydrogen() != 0 && oxygen() == 3 && nitrogen() ==3 && fluorine() !=0 && quin()==1){
++       print(paste("The Drug is likely to be Fluoroquinolone"))
++     }
++     
++     #Rule for Polyketide_Erythromycin
++     else if(carbon() == 37 && hydrogen() == 67 && nitrogen() ==1 && oxygen() == 13 && fluorine() ==0){
++       print(paste("The Drug is likely to be Polyketide"))
++     }
++     
++     #Rule for Polyketide_Clarithromycin
++     else if(carbon() == 38 && hydrogen() == 69 && nitrogen() ==1 && oxygen() == 13 && fluorine() ==0){
++       print(paste("The Drug is likely to be Polyketide"))
++     }
++     
++     #Rule for Polyketide_Cethromycin
++     else if(carbon() == 42 && hydrogen() == 59 && nitrogen() ==3 && oxygen() == 10 && fluorine() ==0){
++       print(paste("The Drug is likely to be Polyketide"))
++     }
++     
++     #Rule for Polyketide_Telithromycin
++     else if(carbon() == 43 && hydrogen() == 65 && nitrogen() ==5 && oxygen() == 10 && fluorine() ==0){
++       print(paste("The Drug is likely to be Polyketide"))
++     }
++     
++     #Rule for Polyketide_Rifampin
++     else if(carbon() == 43 && hydrogen() == 58 && nitrogen() ==4 && oxygen() == 12 && fluorine() ==0){
++       print(paste("The Drug is likely to be Polyketide"))
++     }
++     
++     #Rule for Polyketide_Tetracycline
++     else if(carbon() == 22 && hydrogen() == 24 && nitrogen() == 2 && oxygen() == 8 && fluorine() ==0){
++       print(paste("The Drug is likely to be Polyketide"))
++     }
++     
++     #Rule for Polyketide_Minocycline
++     else if(carbon() == 23 && hydrogen() == 27 && nitrogen() == 3 && oxygen() == 7 && fluorine() ==0){
++       print(paste("The Drug is likely to be Polyketide"))
++     }
++     
++     #Rule for Quinolone
++     else if(carbon() != 0 && hydrogen() != 0 && oxygen() == 3 && nitrogen() ==2 && fluorine() ==0 && quin()==1){
++       print(paste("The Drug is likely to be Quinolone"))
++     }
++     
++     #Rule for Peptide drug Bicyclomycin (C12H18N2O7)
++     else if(carbon()==12 && hydrogen()==18 && nitrogen()==2 && oxygen()==7){
++       print(paste("The drug is likely to be Peptide drug"))
++     }
++     
++     #Rule for Peptide drug Polymyxin B (C56H100N16O17S)
++     else if(carbon()==56 && hydrogen()==98 && nitrogen()==16 && oxygen()==13){
++       print(paste("The drug is likely to be Peptide drug"))
++     }	
++     
++     #Rule for Aminoglycoside
++     else if(carbon() != 0 && hydrogen() >= 2 * oxygen() && nitrogen() !=0 && chlorine() ==0){
++       print(paste("The Drug is likely to be Aminoglycoside"))
++     }
++     
++     #Rule for Nitrofurans
++     else if(nitrogen() !=0 && ring_nitrofuran_C() ==4){
++       print(paste("The Drug is likely to be Nitrofuran"))
++     } 
++     
++     else 
++       "The drug is not found in the list! Please use Stochastic model"
++     
++   }, 
++   include.rownames=FALSE, include.colnames=FALSE)
++   
++   
++   ############################ Drug classification ends here############## 
++   
++   #########################################################################
++   ###$$$$$$$$$$$$$$$$$$$$$$$$$ Rule based Gene classification$$$$$$$$$$$$$$$$$$$$$###
++   #########################################################################
++   
++   output$gclass = renderDataTable({
++     inFile <- input$file
++     if (is.null(inFile))
++       return(NULL)
++     ac <- atomcountMA(read.SDFset(inFile$datapath)[[1]], addH=FALSE) 
++     
++     ################################ 
++     #Extraction of Chemical features
++     ################################
++     
++     #Carbon Content
++     carbon <- reactive({
++       if (("C" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"C"]
++     })
++     
++     #Hydrogen Content
++     hydrogen <- reactive({
++       if (("H" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"H"]
++     })
++     
++     #Oxygen Content
++     oxygen <- reactive({
++       if (("O" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"O"]
++     })
++     
++     #Nitrogen Content
++     nitrogen <- reactive({
++       if (("N" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"N"]
++     })
++     
++     #Chlorine Content
++     chlorine <- reactive({
++       if (("Cl" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"Cl"]
++     })
++     
++     #Sulfur Content
++     sulfur <- reactive({
++       if (("S" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"S"]
++     })
++     
++     #Bromium Content
++     bromium <- reactive({
++       if (("Br" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"Br"]
++     })
++     
++     #Fluorine Content
++     fluorine <- reactive({
++       if (("F" %in% colnames(ac)) == FALSE)
++         return(0)
++       ac[,"F"]
++     })
++     
++     
++     ############################# 
++     # Extraction of Ring features
++     #############################
++     
++     
++     ro <- rings(read.SDFset(inFile$datapath)[[1]],type="count",upper=1000, arom=TRUE) 
++     rings <-  rings(read.SDFset(inFile$datapath)[[1]], upper=Inf, type="all", arom=TRUE, inner=FALSE) 
++     
++     #Quinolone condition
++     quin<- reactive({
++       aromatic_rings<- list()
++       aromatic_rings_final<- list()
++       
++       aliphatic_rings<- list()
++       aliphatic_rings_final<- list()
++       
++       intersect_rings<- list()
++       #intersect_rings_final<- list()
++       
++       
++       for(i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]==TRUE)
++         {
++           aromatic_rings<- rings$RINGS[i]
++           aromatic_rings_final<- rbind(aromatic_rings_final, aromatic_rings)
++           
++         }
++       }
++       
++       for(i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]==FALSE)
++         {
++           aliphatic_rings<- rings$RINGS[i]
++           aliphatic_rings_final<- rbind(aliphatic_rings_final, aliphatic_rings)
++           
++         }
++       }
++       
++       quin<-0 
++       for(i in 1:length(aromatic_rings_final))
++       {
++         for(j in 1:length(aromatic_rings_final))
++         {
++           intersect_rings<-Reduce(intersect, list(aromatic_rings_final[[i]], aromatic_rings_final[[j]]))
++           if(length(intersect_rings)==2)
++           {
++             quin<-1
++           }
++         }
++       }
++       quin 
++       
++     })
++     
++     #Whether Aromatic ring is present or not
++     ring_p_or_a<- reactive({
++       for (i in 1: length(rings$AROMATIC)){
++         if(rings$AROMATIC[[i]]=='TRUE' )
++         {
++           
++           j<-1
++         }
++       }
++       j
++       
++     })
++     
++     #$Acquisition of conditions for sulfonamide
++     
++     sul_matrix<- reactive({
++       inFile <- input$file
++       if (is.null(inFile))
++         return(NULL)
++       
++       matrix<-  as.data.frame(conMA(read.SDFset(inFile$datapath)[[1]], exclude=c("H")))
++       rowname_sul <- row.names(matrix)
++       colname_sul <- colnames(matrix)
++       row_sul_elements<-  data.frame(strsplit(rowname_sul,"_"))[1,]
++       
++       #Acquisition of Sulfur indices
++       sul_index_S <- list() 
++       sul_index_current_S<- list()
++       
++       for(i in 1:length(row_sul_elements)){
++         if(row_sul_elements[i]== 'S')
++         {
++           sul_index_current_S <- i
++           sul_index_S <- rbind(sul_index_S,sul_index_current_S)
++         }
++         
++       }
++       
++       #Acquisition of Oxygen indices
++       sul_index_O <- list() 
++       sul_index_current_O<- list()
++       
++       for(i in 1:length(row_sul_elements)){
++         if(row_sul_elements[i]== 'O')
++         {
++           sul_index_current_O <- i
++           sul_index_O <- rbind(sul_index_O,sul_index_current_O)
++         }
++         
++       }
++       
++       output<- list()
++       output_final<- list()
++       for(i in 1: length(sul_index_S[,1]))
++       {
++         l<-0
++         for(j in 1: length(sul_index_O[,1]))
++         {
++           a<- sul_index_S[,1][i]
++           b<- sul_index_O[,1][j]
++           if(matrix[a$sul_index_current_S[1],b$sul_index_current_O]==2)
++           {
++             l<-l+2
++           }
++           
++         }
++         output<- l
++         output_final<- rbind(output_final,output)
++       } 
++       
++       for(i in 1: length(output_final))
++       {
++         if(output_final[i]==4)
++         {
++           k<-4
++         }
++         
++       }
++       k
++       
++     })
++     
++     #Acquisition of Carbon number in the aromatic ring of nitrofurans
++     ring_nitrofuran_C<- reactive({
++       
++       top1<- list()
++       top1_0<- list()
++       for (i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]== TRUE)
++         {
++           X <- list(rings$RINGS[i])[[1]][[1]]
++           
++           if(length(X)==5){
++             Y <- data.frame(strsplit(X,"_"))[1,]
++             Z <- rowSums(Y == "C")
++             J <- rowSums(Y== "O")
++             
++             output_O<- J[[1]]
++             output_C<- Z[[1]]
++             
++             top<- as.data.frame(output_C)
++             top_O<- as.data.frame(output_O)
++             
++             top1<- rbind(top1,top)
++             top1_0<- rbind(top1_0, top_O)
++             
++           }
++           
++         }
++       }
++       
++       for(j in 1: ncol(top1))
++       {
++         if(top1[j]== 4 && top1_0[j]==1)
++         {k<-4}                               
++       }
++       k 
++       
++     })
++     
++     
++     #Acquisition of Carbon content in aliphatic rings
++     ring_C<- reactive({
++       
++       top1<- list()
++       for (i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]== FALSE)
++         {
++           X <- list(rings$RINGS[i])[[1]][[1]]
++           Y <- data.frame(strsplit(X,"_"))[1,]
++           Z <- rowSums(Y == "C")
++           
++           output_C<- Z[[1]]
++           top<- as.data.frame(output_C)
++           top1<- rbind(top1,top)
++         }
++       }
++       for(j in 1: ncol(top1))
++       {
++         if(top1[j]== 3)
++         {k<-3}
++       }
++       k })
++     
++     
++     #Acquisition of Nitrogen content in aliphatic rings
++     ring_N<- reactive({
++       
++       top1_N<- list()
++       for (i in 1:length(rings$AROMATIC))
++       {
++         if(rings$AROMATIC[i]== FALSE)
++         {
++           X <- list(rings$RINGS[i])[[1]][[1]]
++           Y <- data.frame(strsplit(X,"_"))[1,]
++           Z <- rowSums(Y == "N")
++           
++           output_N<- Z[[1]]
++           top_N<- as.data.frame(output_N)
++           top1_N<- rbind(top1_N,top_N)
++         }
++       }
++       for(j in 1: ncol(top1_N))
++       {
++         if(top1_N[j]== 1)
++         {k<-1}
++       }
++       k})
++     
++     #Total ring
++     total_ring <- reactive({
++       if(is.null(ro[1]))
++         return(NULL)
++       ro[1]
++     }) 
++     
++     #Aromatic ring
++     aromatic_ring <- reactive({
++       if(is.null(ro[2]))
++         return(NULL)
++       ro[2]
++     }) 	  
++     
++     ##########################################################################################################
++     ##########################################################################################################
++     ##########################################################################################################
++     ################################# Genes causing resistance ###############################################
++     ##########################################################################################################
++     ##########################################################################################################
++     ##########################################################################################################
++     
++     
++     
++     
++     #$$$$$$$$$$$$$$$$$$$$$$$$$$$  Drug - Gene classification starts here $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$#	  
++     
++     #Rule for Acriflavine
++     if(carbon() ==27 && chlorine() ==1 && hydrogen() == 25 && nitrogen() == 6 && total_ring()==12 && aromatic_ring() ==12){
++       Drug_Name<- 'Acriflavine'
++       Drug_Pubchem_ID<- '443101'
++       Resistance_gene_class<-'Two Component system'
++       Resistance_genes_involved<- 'AcrAB-Tolc system'
++       Bibliography<- 'PMID: 24043404'
++       acriflavine<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     } 
++     
++     #Rule for Aminocoumarin
++     else if(carbon() ==31 && hydrogen() == 36 && nitrogen()==2 && oxygen()==11 && total_ring()== 5 && aromatic_ring()==4)
++     {
++       Drug_Name<- 'Novobiocin'
++       Drug_Pubchem_ID<- '54675769'
++       Resistance_gene_class<-'Response regulator which stimulate multidrug transporter ABC expression'
++       Resistance_genes_involved<- 'BaeR'
++       Bibliography<- 'PMID: 12107133'
++       Aminocoumarin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++       
++     }
++     
++     #Rule for Anisole
++     else if (carbon()== 14 && hydrogen() == 18 && nitrogen() == 4 && oxygen() == 3 && total_ring() == aromatic_ring())
++     {
++       Drug_Name<- c('Trimethoprim','Trimethoprim','Trimethoprim','Trimethoprim','Trimethoprim','Trimethoprim','Trimethoprim','Trimethoprim')
++       Drug_Pubchem_ID<- c('5578','5578','5578','5578','5578','5578','5578','5578')
++       Resistance_gene_class<-'Modification of enzyme Dihydrofolate reductase'
++       Resistance_genes_involved<- c('dfrA1','dfrA9','dfrA12','dfrA13','dfr7',
++                                     'dfr17','dhfrV','dhfrXIII')
++       Bibliography<- c('PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640',
++                        'PMID: 20374640','PMID: 20374640','PMID: 14506033','PMID: 14506033')
++       Anisole<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++       
++     }
++     
++     #Rule for Anthracycline
++     else if(carbon() == 27 && hydrogen() >= 29 && oxygen() ==10  && nitrogen() ==1 && chlorine() ==0 && total_ring() ==11&& aromatic_ring() >=2 ){
++       Drug_Name<- 'Daunomycin'
++       Drug_Pubchem_ID<- '30323'
++       Resistance_gene_class<-'Efflux pump'
++       Resistance_genes_involved<- 'MdfA'
++       Bibliography<- 'PMID: 9079913'
++       Anthracycline<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++       
++     }
++     
++     #Rule for Benzalkonium
++     else if(bromium()==1&& carbon() == 21 && hydrogen() >= 38 && oxygen() ==0  && nitrogen() ==1 && chlorine() ==0 && total_ring() ==1 && aromatic_ring() ==1 ){
++       Drug_Name<- 'Benzalkonium'
++       Drug_Pubchem_ID<- '23705'
++       Resistance_gene_class<-'Efflux pump'
++       Resistance_genes_involved<- 'MdfA'
++       Bibliography<- 'PMID: 9079913'
++       Benzalkonium<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++       
++     }
++     
++     #Rule for Chloramphenicol
++     else if(carbon() == 11 && hydrogen() == 12 && oxygen() ==5  && nitrogen() ==2 && chlorine() ==2 && total_ring() ==1 && aromatic_ring() ==1 ){
++       Drug_Name<- c('Chloramphenicol','Chloramphenicol','Chloramphenicol','Chloramphenicol','Chloramphenicol','Chloramphenicol','Chloramphenicol')
++       Drug_Pubchem_ID<- c('5959','5959','5959','5959','5959','5959','5959')
++       Resistance_gene_class<-c('Chloramphenicol acetyltransferase','Chloramphenicol acetyltransferase','Chloramphenicol acetyltransferase','Chloramphenicol acetyltransferase',
++                                'Efflux pump','Efflux pump','Efflux pump')
++       Resistance_genes_involved<- c('catI','catII','catIII','cml','MdfA','AcrAB efflux system','floR')
++       Bibliography<- c('PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 9079913','PMID: 8550435','PMID: 11101601')
++       Chloramphenicol<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }
++     
++     #Rule for Florfenicol
++     else if(carbon() != 0 && hydrogen() != 0 && chlorine() !=0 && fluorine() !=0 && nitrogen() !=0 && oxygen() !=0 && sulfur() !=0    && total_ring() ==1 && aromatic_ring() ==1 ){
++       Drug_Name<- 'Florfenicol'
++       Drug_Pubchem_ID<- '114811'
++       Resistance_gene_class<-'Efflux pump'
++       Resistance_genes_involved<- 'floR'
++       Bibliography<- 'PMID: 15251195'
++       Florfenicol<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }
++     
++     
++     #Rule for Polyketide_Erythromycin
++     else if(carbon() == 37 && hydrogen() == 67 && nitrogen() ==1 && oxygen() == 13 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Erythromycin','Erythromycin','Erythromycin',
++                     'Clarithromycin',
++                     'Cethromycin',
++                     'Telithromycin','Telithromycin',
++                     'Rifampin', 'Rifampin',
++                     'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline',
++                     'Minocycline'
++       )
++       
++       Drug_Pubchem_ID<-  c('12560','12560','12560','12560',
++                            '84029',
++                            '447451',
++                            '3002190','3002190',
++                            '5381226', '5381226',
++                            '54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776',
++                            '54675783'
++       )
++       
++       Resistance_gene_class<- c('Efflux pump','Efflux pump','Mutation','Two Component system',
++                                 'Two Component system',
++                                 'Mutation',
++                                 'Mutation','Two Component system',
++                                 'Efflux pump','Efflux pump',
++                                 'Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux pump','Efflux pump','Efflux pump','Horizontal Gene Transfer',
++                                 'Efflux pump'
++       )
++       
++       Resistance_genes_involved<- c('MdfA', 'EmrE protein','Mutations in the tentacles of L4 and L22, proteins of Escherichia coli larger ribosomal subunit confer macrolide resistance','AcrAB-TolC pump',
++                                     'AcrAB-TolC pump',
++                                     'U2609C of 23S rRNA',
++                                     'U2609C of 23S rRNA','AcrAB-TolC pump',
++                                     'MdfA','AcrAB efflux system',
++                                     'tetA','tetB','tetC','tetD','tetE','tetG', 'MdfA','EmrE protein','AcrAB efflux system','Integron 1',
++                                     'yhiV'
++       )
++       
++       Bibliography<- c('PMID: 9079913','PMID: 9710669','PMID: 17956547','PMID: 15328143',
++                        'PMID: 15328143',
++                        'PMID: 11698379',
++                        'PMID: 11698379','PMID: 15328143',
++                        'PMID: 9079913','PMID: 8550435',
++                        'PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 9079913','PMID: 9710669','PMID: 8550435','PMID: 26889395',
++                        'PMID: 21048014'
++       )
++       
++       Polyketide_Erythromycin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }
++     
++     #Rule for Polyketide_Clarithromycin
++     else if(carbon() == 38 && hydrogen() == 69 && nitrogen() ==1 && oxygen() == 13 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Erythromycin','Erythromycin','Erythromycin',
++                     'Clarithromycin',
++                     'Cethromycin',
++                     'Telithromycin','Telithromycin',
++                     'Rifampin', 'Rifampin',
++                     'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline',
++                     'Minocycline'
++       )
++       
++       Drug_Pubchem_ID<-  c('12560','12560','12560','12560',
++                            '84029',
++                            '447451',
++                            '3002190','3002190',
++                            '5381226', '5381226',
++                            '54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776',
++                            '54675783'
++       )
++       
++       Resistance_gene_class<- c('Efflux pump','Efflux pump','Mutation','Two Component system',
++                                 'Two Component system',
++                                 'Mutation',
++                                 'Mutation','Two Component system',
++                                 'Efflux pump','Efflux pump',
++                                 'Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux pump','Efflux pump','Efflux pump','Horizontal Gene Transfer',
++                                 'Efflux pump'
++       )
++       
++       Resistance_genes_involved<- c('MdfA', 'EmrE protein','Mutations in the tentacles of L4 and L22, proteins of Escherichia coli larger ribosomal subunit confer macrolide resistance','AcrAB-TolC pump',
++                                     'AcrAB-TolC pump',
++                                     'U2609C of 23S rRNA',
++                                     'U2609C of 23S rRNA','AcrAB-TolC pump',
++                                     'MdfA','AcrAB efflux system',
++                                     'tetA','tetB','tetC','tetD','tetE','tetG', 'MdfA','EmrE protein','AcrAB efflux system','Integron 1',
++                                     'yhiV'
++       )
++       
++       Bibliography<- c('PMID: 9079913','PMID: 9710669','PMID: 17956547','PMID: 15328143',
++                        'PMID: 15328143',
++                        'PMID: 11698379',
++                        'PMID: 11698379','PMID: 15328143',
++                        'PMID: 9079913','PMID: 8550435',
++                        'PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 9079913','PMID: 9710669','PMID: 8550435','PMID: 26889395',
++                        'PMID: 21048014'
++       )
++       
++       Polyketide_Erythromycin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }
++     
++     #Rule for Polyketide_Cethromycin
++     else if(carbon() == 42 && hydrogen() == 59 && nitrogen() ==3 && oxygen() == 10 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Erythromycin','Erythromycin','Erythromycin',
++                     'Clarithromycin',
++                     'Cethromycin',
++                     'Telithromycin','Telithromycin',
++                     'Rifampin', 'Rifampin',
++                     'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline',
++                     'Minocycline'
++       )
++       
++       Drug_Pubchem_ID<-  c('12560','12560','12560','12560',
++                            '84029',
++                            '447451',
++                            '3002190','3002190',
++                            '5381226', '5381226',
++                            '54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776',
++                            '54675783'
++       )
++       
++       Resistance_gene_class<- c('Efflux pump','Efflux pump','Mutation','Two Component system',
++                                 'Two Component system',
++                                 'Mutation',
++                                 'Mutation','Two Component system',
++                                 'Efflux pump','Efflux pump',
++                                 'Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux pump','Efflux pump','Efflux pump','Horizontal Gene Transfer',
++                                 'Efflux pump'
++       )
++       
++       Resistance_genes_involved<- c('MdfA', 'EmrE protein','Mutations in the tentacles of L4 and L22, proteins of Escherichia coli larger ribosomal subunit confer macrolide resistance','AcrAB-TolC pump',
++                                     'AcrAB-TolC pump',
++                                     'U2609C of 23S rRNA',
++                                     'U2609C of 23S rRNA','AcrAB-TolC pump',
++                                     'MdfA','AcrAB efflux system',
++                                     'tetA','tetB','tetC','tetD','tetE','tetG', 'MdfA','EmrE protein','AcrAB efflux system','Integron 1',
++                                     'yhiV'
++       )
++       
++       Bibliography<- c('PMID: 9079913','PMID: 9710669','PMID: 17956547','PMID: 15328143',
++                        'PMID: 15328143',
++                        'PMID: 11698379',
++                        'PMID: 11698379','PMID: 15328143',
++                        'PMID: 9079913','PMID: 8550435',
++                        'PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 9079913','PMID: 9710669','PMID: 8550435','PMID: 26889395',
++                        'PMID: 21048014'
++       )
++       
++       Polyketide_Erythromycin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }
++     
++     #Rule for Polyketide_Telithromycin
++     else if(carbon() == 43 && hydrogen() == 65 && nitrogen() ==5 && oxygen() == 10 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Erythromycin','Erythromycin','Erythromycin',
++                     'Clarithromycin',
++                     'Cethromycin',
++                     'Telithromycin','Telithromycin',
++                     'Rifampin', 'Rifampin',
++                     'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline',
++                     'Minocycline'
++       )
++       
++       Drug_Pubchem_ID<-  c('12560','12560','12560','12560',
++                            '84029',
++                            '447451',
++                            '3002190','3002190',
++                            '5381226', '5381226',
++                            '54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776',
++                            '54675783'
++       )
++       
++       Resistance_gene_class<- c('Efflux pump','Efflux pump','Mutation','Two Component system',
++                                 'Two Component system',
++                                 'Mutation',
++                                 'Mutation','Two Component system',
++                                 'Efflux pump','Efflux pump',
++                                 'Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux pump','Efflux pump','Efflux pump','Horizontal Gene Transfer',
++                                 'Efflux pump'
++       )
++       
++       Resistance_genes_involved<- c('MdfA', 'EmrE protein','Mutations in the tentacles of L4 and L22, proteins of Escherichia coli larger ribosomal subunit confer macrolide resistance','AcrAB-TolC pump',
++                                     'AcrAB-TolC pump',
++                                     'U2609C of 23S rRNA',
++                                     'U2609C of 23S rRNA','AcrAB-TolC pump',
++                                     'MdfA','AcrAB efflux system',
++                                     'tetA','tetB','tetC','tetD','tetE','tetG', 'MdfA','EmrE protein','AcrAB efflux system','Integron 1',
++                                     'yhiV'
++       )
++       
++       Bibliography<- c('PMID: 9079913','PMID: 9710669','PMID: 17956547','PMID: 15328143',
++                        'PMID: 15328143',
++                        'PMID: 11698379',
++                        'PMID: 11698379','PMID: 15328143',
++                        'PMID: 9079913','PMID: 8550435',
++                        'PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 9079913','PMID: 9710669','PMID: 8550435','PMID: 26889395',
++                        'PMID: 21048014'
++       )
++       
++       Polyketide_Erythromycin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }
++     
++     #Rule for Polyketide_Rifampin
++     else if(carbon() == 43 && hydrogen() == 58 && nitrogen() ==4 && oxygen() == 12 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Erythromycin','Erythromycin','Erythromycin',
++                     'Clarithromycin',
++                     'Cethromycin',
++                     'Telithromycin','Telithromycin',
++                     'Rifampin', 'Rifampin',
++                     'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline',
++                     'Minocycline'
++       )
++       
++       Drug_Pubchem_ID<-  c('12560','12560','12560','12560',
++                            '84029',
++                            '447451',
++                            '3002190','3002190',
++                            '5381226', '5381226',
++                            '54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776',
++                            '54675783'
++       )
++       
++       Resistance_gene_class<- c('Efflux pump','Efflux pump','Mutation','Two Component system',
++                                 'Two Component system',
++                                 'Mutation',
++                                 'Mutation','Two Component system',
++                                 'Efflux pump','Efflux pump',
++                                 'Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux pump','Efflux pump','Efflux pump','Horizontal Gene Transfer',
++                                 'Efflux pump'
++       )
++       
++       Resistance_genes_involved<- c('MdfA', 'EmrE protein','Mutations in the tentacles of L4 and L22, proteins of Escherichia coli larger ribosomal subunit confer macrolide resistance','AcrAB-TolC pump',
++                                     'AcrAB-TolC pump',
++                                     'U2609C of 23S rRNA',
++                                     'U2609C of 23S rRNA','AcrAB-TolC pump',
++                                     'MdfA','AcrAB efflux system',
++                                     'tetA','tetB','tetC','tetD','tetE','tetG', 'MdfA','EmrE protein','AcrAB efflux system','Integron 1',
++                                     'yhiV'
++       )
++       
++       Bibliography<- c('PMID: 9079913','PMID: 9710669','PMID: 17956547','PMID: 15328143',
++                        'PMID: 15328143',
++                        'PMID: 11698379',
++                        'PMID: 11698379','PMID: 15328143',
++                        'PMID: 9079913','PMID: 8550435',
++                        'PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 9079913','PMID: 9710669','PMID: 8550435','PMID: 26889395',
++                        'PMID: 21048014'
++       )
++       
++       Polyketide_Erythromycin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }
++     
++     #Rule for Polyketide_Tetracycline
++     else if(carbon() == 22 && hydrogen() == 24 && nitrogen() == 2 && oxygen() == 8 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Erythromycin','Erythromycin','Erythromycin',
++                     'Clarithromycin',
++                     'Cethromycin',
++                     'Telithromycin','Telithromycin',
++                     'Rifampin', 'Rifampin',
++                     'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline',
++                     'Minocycline'
++       )
++       
++       Drug_Pubchem_ID<-  c('12560','12560','12560','12560',
++                            '84029',
++                            '447451',
++                            '3002190','3002190',
++                            '5381226', '5381226',
++                            '54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776',
++                            '54675783'
++       )
++       
++       Resistance_gene_class<- c('Efflux pump','Efflux pump','Mutation','Two Component system',
++                                 'Two Component system',
++                                 'Mutation',
++                                 'Mutation','Two Component system',
++                                 'Efflux pump','Efflux pump',
++                                 'Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux pump','Efflux pump','Efflux pump','Horizontal Gene Transfer',
++                                 'Efflux pump'
++       )
++       
++       Resistance_genes_involved<- c('MdfA', 'EmrE protein','Mutations in the tentacles of L4 and L22, proteins of Escherichia coli larger ribosomal subunit confer macrolide resistance','AcrAB-TolC pump',
++                                     'AcrAB-TolC pump',
++                                     'U2609C of 23S rRNA',
++                                     'U2609C of 23S rRNA','AcrAB-TolC pump',
++                                     'MdfA','AcrAB efflux system',
++                                     'tetA','tetB','tetC','tetD','tetE','tetG', 'MdfA','EmrE protein','AcrAB efflux system','Integron 1',
++                                     'yhiV'
++       )
++       
++       Bibliography<- c('PMID: 9079913','PMID: 9710669','PMID: 17956547','PMID: 15328143',
++                        'PMID: 15328143',
++                        'PMID: 11698379',
++                        'PMID: 11698379','PMID: 15328143',
++                        'PMID: 9079913','PMID: 8550435',
++                        'PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 9079913','PMID: 9710669','PMID: 8550435','PMID: 26889395',
++                        'PMID: 21048014'
++       )
++       
++       Polyketide_Erythromycin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }
++     
++     #Rule for Polyketide_Minocycline
++     else if(carbon() == 23 && hydrogen() == 27 && nitrogen() == 3 && oxygen() == 7 && fluorine() ==0){
++       Drug_Name<- c('Erythromycin','Erythromycin','Erythromycin','Erythromycin',
++                     'Clarithromycin',
++                     'Cethromycin',
++                     'Telithromycin','Telithromycin',
++                     'Rifampin', 'Rifampin',
++                     'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline', 'Tetracycline',
++                     'Minocycline'
++       )
++       
++       Drug_Pubchem_ID<-  c('12560','12560','12560','12560',
++                            '84029',
++                            '447451',
++                            '3002190','3002190',
++                            '5381226', '5381226',
++                            '54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776','54675776',
++                            '54675783'
++       )
++       
++       Resistance_gene_class<- c('Efflux pump','Efflux pump','Mutation','Two Component system',
++                                 'Two Component system',
++                                 'Mutation',
++                                 'Mutation','Two Component system',
++                                 'Efflux pump','Efflux pump',
++                                 'Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux Pump','Efflux pump','Efflux pump','Efflux pump','Horizontal Gene Transfer',
++                                 'Efflux pump'
++       )
++       
++       Resistance_genes_involved<- c('MdfA', 'EmrE protein','Mutations in the tentacles of L4 and L22, proteins of Escherichia coli larger ribosomal subunit confer macrolide resistance','AcrAB-TolC pump',
++                                     'AcrAB-TolC pump',
++                                     'U2609C of 23S rRNA',
++                                     'U2609C of 23S rRNA','AcrAB-TolC pump',
++                                     'MdfA','AcrAB efflux system',
++                                     'tetA','tetB','tetC','tetD','tetE','tetG', 'MdfA','EmrE protein','AcrAB efflux system','Integron 1',
++                                     'yhiV'
++       )
++       
++       Bibliography<- c('PMID: 9079913','PMID: 9710669','PMID: 17956547','PMID: 15328143',
++                        'PMID: 15328143',
++                        'PMID: 11698379',
++                        'PMID: 11698379','PMID: 15328143',
++                        'PMID: 9079913','PMID: 8550435',
++                        'PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 9079913','PMID: 9710669','PMID: 8550435','PMID: 26889395',
++                        'PMID: 21048014'
++       )
++       
++       Polyketide_Erythromycin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     } 
++     
++     
++     
++     
++     #Rule for Rhodamine
++     else if(carbon() == 28 && hydrogen() == 31 && chlorine() ==1 && fluorine() ==0 && nitrogen() ==2 && oxygen() ==3 && sulfur() ==0    && total_ring() ==7 && aromatic_ring() ==7 ){
++       Drug_Name<- 'Rhodamine'
++       Drug_Pubchem_ID<- '6694'
++       Resistance_gene_class<-'Efflux pump'
++       Resistance_genes_involved<- 'MdfA'
++       Bibliography<- 'PMID: 9079913'
++       Rhodamine<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++       
++     }
++     
++     #Rule for Thiolactomycin
++     else if(carbon() == 11 && hydrogen() == 14 && chlorine() ==0 && fluorine() ==0 && nitrogen() ==0 && oxygen() ==2 && sulfur() ==1    && total_ring() ==1 && aromatic_ring() ==0 ){
++       Drug_Name<- 'Thiolactomycin'
++       Drug_Pubchem_ID<- '445629'
++       Resistance_gene_class<-'Efflux pump/ Multi component system'
++       Resistance_genes_involved<- 'EmrAB operon'
++       Bibliography<- 'PMID: 9710669'
++       Thiolactomycin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }
++     
++     #Rule for Beta Lactam
++     else if(carbon() >= 12 && carbon() <=23 && hydrogen() >= 16 && hydrogen() <= 27 && oxygen() >=4 && oxygen() <=9 && nitrogen() >=2 && nitrogen() <=8 && sulfur() >=1 && sulfur() <=3 && ring_C() ==3 && ring_N()==1){
++       Drug_Name<- c('Amoxicillin','Amoxicillin','Amoxicillin','Amoxicillin','Amoxicillin','Amoxicillin',
++                     'Ampicillin','Ampicillin','Ampicillin','Ampicillin','Ampicillin','Ampicillin','Ampicillin','Ampicillin',
++                     'Aztreonam',
++                     'Cefalotin','Cefalotin',
++                     'Cefepime','Cefepime','Cefepime','Cefepime','Cefepime',
++                     'Cefoselis','Cefoselis',
++                     'Cefotaxime','Cefotaxime','Cefotaxime','Cefotaxime',
++                     'Cefoxitin','Cefoxitin','Cefoxitin','Cefoxitin','Cefoxitin',
++                     'Cefpirome','Cefpirome',
++                     'Ceftazidime','Ceftazidime','Ceftazidime','Ceftazidime',
++                     'Cefradine','Cefradine',
++                     'Cefuroxime',
++                     'Ceftriaxone','Ceftriaxone',
++                     'Ceftiofur',
++                     'Ertapenem','Ertapenem','Ertapenem','Ertapenem',
++                     'Imipenem','Imipenem','Imipenem','Imipenem','Imipenem','Imipenem',
++                     'Meropenem','Meropenem','Meropenem','Meropenem','Meropenem','Meropenem',
++                     'Moxalactam','Moxalactam',
++                     'Penicillin G','Penicillin G',
++                     'Piperacillin',
++                     'Ticarcillin'
++       )
++       Drug_Pubchem_ID<- c('33613','33613','33613','33613','33613','33613',
++                           '6249','6249','6249','6249','6249','6249','6249','6249',
++                           '5742832',
++                           '6024','6024',
++                           '5479537','5479537','5479537','5479537','5479537',
++                           '5748845','5748845',
++                           '5742673','5742673','5742673','5742673',
++                           '441199','441199','441199','441199','441199',
++                           '5479539','5479539',
++                           '5481173','5481173','5481173','5481173',
++                           '38103','38103',
++                           '5479529',
++                           '5479530','5479530',
++                           '6328657',
++                           '150610','150610','150610','150610',
++                           '104838','104838','104838','104838','104838','104838',
++                           '441130','441130','441130','441130','441130','441130',
++                           '47499','47499',
++                           '5904','5904',
++                           '43672',
++                           '36921'
++       )
++       Resistance_gene_class<-c('Beta Lactamase','Beta Lactamase','Beta Lactamase','Beta Lactamase','Beta Lactamase','Horizontal Gene Transfer',
++                                'Beta Lactamase','Beta Lactamase','Beta Lactamase','Beta Lactamase','Beta Lactamase','Two Component system','Beta Lactamase','Beta Lactamase',
++                                'Beta Lactamase',
++                                'Horizontal Gene Transfer','Beta Lactamase',
++                                'Beta Lactamase','Beta Lactamase','Beta Lactamase','Efflux pump','Plasmid mediated Beta lactamase',
++                                'Beta Lactamase','Beta Lactamase',
++                                'Beta Lactamase','Beta Lactamase','Beta Lactamase','Beta Lactamase',
++                                'Beta Lactamase','Beta Lactamase','Beta Lactamase','Beta Lactamase','Beta Lactamase',
++                                'Beta Lactamase','Beta Lactamase',
++                                'Beta Lactamase','Beta Lactamase','Beta Lactamase','Horizontal Gene Transfer',
++                                'Beta Lactamase', 'Beta Lactamase',
++                                'Beta Lactamase',
++                                'Beta Lactamase', 'Beta Lactamase',
++                                'Beta Lactamase',
++                                'Beta Lactamase','Beta Lactamase','Beta Lactamase','16S rRNA methylase',
++                                'Beta Lactamase','Beta Lactamase','Beta Lactamase','Beta Lactamase','Beta Lactamase','16S rRNA methylase',
++                                'Beta Lactamase','Beta Lactamase','Beta Lactamase','Beta Lactamase','Beta Lactamase','16S rRNA methylase',
++                                'Beta Lactamase', 'Beta Lactamase',
++                                'Beta Lactamase', 'Beta Lactamase',
++                                'Beta Lactamase',
++                                'Beta Lactamase'
++       )
++       Resistance_genes_involved<- c('Bla(TEM)','Bla(OXA-1)','Bla(SHV)','Bla(ampC)','Bla(CTX-M)','Class 1 Integron',
++                                     'Bla(TEM)','Bla(SHV)','Bla(NDM-1)', 'Bla(NDM-12)','Bla(CMY)', 'AcrAB efflux system','Bla(VIM-2)','Bla(IBC-1)',
++                                     'Bla(VIM-2)',
++                                     'Class 1 Integron ','Bla(CMY)',
++                                     'Bla(NDM-1)','Bla(NDM-12)','Bla(NDM-4)','marA','Bla(CMY)- deletion resulting in Bla(CMY-33) and Bla(CMY-44)',
++                                     'Bla(NDM-1)','Bla(NDM-12)',
++                                     'Bla(NDM-1)','Bla(NDM-12)','Bla(NDM-4)','Bla(CTX-M)',
++                                     'Bla(NDM-1)','Bla(NDM-12)','Bla(NDM-4)','Bla(VIM-2)','Bla(IBC-1)',
++                                     'Bla(NDM-1)','Bla(NDM-12)',
++                                     'Bla(NDM-1)','Bla(NDM-12)','Bla(NDM-4)','Class 1 Integron',
++                                     'Bla(NDM-1)','Bla(NDM-12)',
++                                     'Bla(NDM-4)',
++                                     'Bla(NDM-1)','Bla(NDM-12)',
++                                     'Bla(CMY2)',
++                                     'Bla(CTX-M-15)','Bla(CMY-6)','Bla(NDM-4)','armA',
++                                     'Bla(CTX-M-15)','Bla(CMY-6)','Bla(NDM-4)','Bla(NDM-1)','Bla(NDM-12)','armA',
++                                     'Bla(CTX-M-15)','Bla(CMY-6)','Bla(NDM-4)','Bla(NDM-1)','Bla(NDM-12)','armA',
++                                     'Bla(NDM-1)','Bla(NDM-12)',
++                                     'Bla(NDM-1)','Bla(NDM-12)',
++                                     'Bla(NDM-4)',
++                                     'Bla(NDM-4)'
++       )
++       Bibliography<- c('PMID: 11751770','PMID: 11751770','PMID: 11751770','PMID: 11751770','PMID: 19402960','PMID: 26889395',
++                        'PMID: 20374640','PMID: 20374640','PMID: 25092693','PMID: 25092693','PMID: 11709361','PMID: 8550435','PMID: 15301681','PMID: 15301681',
++                        'PMID: 15301681',
++                        'PMID: 26889395','PMID: 11709361',
++                        'PMID: 25092693','PMID: 25092693','PMID: 22252797','PMID: 21048014','PMID: 19414578',
++                        'PMID: 25092693','PMID: 25092693',
++                        'PMID: 25092693','PMID: 25092693','PMID: 22252797','PMID: 12111569',
++                        'PMID: 25092693','PMID: 25092693','PMID: 22252797','PMID: 15301681','PMID: 15301681',
++                        'PMID: 25092693','PMID: 25092693',
++                        'PMID: 25092693','PMID: 25092693','PMID: 22252797','PMID: 26889395',
++                        'PMID: 25092693','PMID: 25092693',
++                        'PMID: 22252797',
++                        'PMID: 25092693','PMID: 25092693',
++                        'PMID: 16751500',
++                        'PMID: 22252797','PMID: 22252797','PMID: 22252797','PMID: 22252797',
++                        'PMID: 22252797','PMID: 22252797','PMID: 22252797','PMID: 25092693','PMID: 25092693','PMID: 22252797',
++                        'PMID: 22252797','PMID: 22252797','PMID: 22252797','PMID: 25092693','PMID: 25092693','PMID: 22252797',
++                        'PMID: 25092693','PMID: 25092693',
++                        'PMID: 25092693','PMID: 25092693',
++                        'PMID: 22252797',
++                        'PMID: 22252797'
++       )
++       Beta_Lactam<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }
++     
++     #Rule for Sulfonamide
++     else if(carbon() != 0 && hydrogen() != 0 && oxygen() != 0 && nitrogen() !=0 && sulfur() !=0 && sul_matrix() == 4 && ring_p_or_a() == 1){
++       Drug_Name<- c('Sulfadiazine', 
++                     'Sulfamethoxazole','Sulfamethoxazole','Sulfamethoxazole'
++       )
++       Drug_Pubchem_ID<- c('5215', 
++                           '5329','5329','5329'
++       )
++       Resistance_gene_class<- c('Efflux pump',
++                                 'Dihydropteroate synthase','Dihydropteroate synthase','Dihydropteroate synthase'
++       )
++       Resistance_genes_involved<- c('EmrE protein',
++                                     'Sul1','Sul2','Sul3'
++       )
++       Bibliography<- c('PMID: 9710669',
++                        'PMID: 24423710','PMID: 24423710','PMID: 24423710')
++       Sulfonamide<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++       
++     }
++     
++     #Rule for Fluoroquinolone
++     else if(carbon() != 0 && hydrogen() != 0 && oxygen() == 3 && nitrogen() ==3 && fluorine() !=0 && quin()==1){
++       Drug_Name<- c('Ciprofloxacin','Ciprofloxacin','Ciprofloxacin','Ciprofloxacin',
++                     'Sitafloxacin',
++                     'Norfloxacin')
++       Drug_Pubchem_ID<- c('2764','2764','2764','2764',
++                           '461399',
++                           '4539')
++       Resistance_gene_class<- c('Horizontal Gene Transfer','Beta Lactamase','Efflux pump','Efflux pump',
++                                 'Efflux Pump',
++                                 'Multidrug Efflux Pump'
++       )
++       Resistance_genes_involved<- c('Class 1 Integron ','CTX-M ??-lactamases','Mutation in gyrA gene of Escherichia coli','AcrAB efflux',
++                                     'mdfA',
++                                     'ydhE'
++       )
++       Bibliography<- c('PMID: 26889395','PMID: 19402960','PMID: 11083655','PMID: 11083655',
++                        'PMID: 21048014','PMID: 12615854'
++       )
++       Fluoroquinolone<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++       
++     }
++     
++     #Rule for Quinolone
++     else if(carbon() != 0 && hydrogen() != 0 && oxygen() == 3 && nitrogen() ==2 && fluorine() ==0&& quin()==1 ){
++       Drug_Name<- c('Nalidixic Acid','Nalidixic Acid','Nalidixic Acid','Nalidixic Acid','Nalidixic Acid')
++       Drug_Pubchem_ID<- c('4421',
++                           '4421',
++                           '4421','4421','4421')
++       Resistance_gene_class<- c('Horizontal Gene Transfer',
++                                 'Efflux pump/ Multi component system',
++                                 'Efflux pump','Efflux pump','Efflux pump'
++       )
++       Resistance_genes_involved<- c('Integron 1',
++                                     'EmrAB operon',
++                                     'AcrAB efflux system','marA','EmrB'
++       )
++       Bibliography<- c('PMID: 26889395',
++                        'PMID: 9710669',
++                        'PMID: 8550435','PMID: 21048014','PMID: 1409590'
++       )
++       Quinolone<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++       
++     }
++     
++     #Rule for Peptide drug Bicyclomycin (C12H18N2O7)
++     else if(carbon()==12 && hydrogen()==18 && nitrogen()==2 && oxygen()==7){
++       Drug_Name<- c('Bicyclomycin','Polymyxin B','Polymyxin B')
++       Drug_Pubchem_ID<- c('426058','49800004','49800004')
++       Resistance_gene_class<- c('Efflux Pump','Two Component system','Phosphorylation of undecaprenol')
++       Resistance_genes_involved<- c('BcR','AcrAB-Tolc system','bacA') 
++       Bibliography<- c('PMID: 8486276','PMID: 19926649','PMID: 8389741')
++       Peptide_drug_Bicyclomycin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }
++     
++     #Rule for Peptide drug Polymyxin B (C56H100N16O17S)
++     else if(carbon()==56 && hydrogen()==98 && nitrogen()==16 && oxygen()==13){
++       Drug_Name<- c('Bicyclomycin','Polymyxin B','Polymyxin B')
++       Drug_Pubchem_ID<- c('426058','49800004','49800004')
++       Resistance_gene_class<- c('Efflux Pump','Two Component system','Phosphorylation of undecaprenol')
++       Resistance_genes_involved<- c('BcR','AcrAB-Tolc system','bacA')
++       Bibliography<-  c('PMID: 8486276','PMID: 19926649','PMID: 8389741')
++       Peptide_drug_Bicyclomycin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }	
++     
++     #Rule for Aminoglycoside
++     else if(carbon() != 0 && hydrogen() >= 2 * oxygen() && nitrogen() !=0 && chlorine() ==0){
++       
++       Drug_Name<- c('Apramycin',
++                     'Gentamicin','Gentamicin','Gentamicin',
++                     'Hygromycin B',
++                     'Kanamycin','Kanamycin','Kanamycin','Kanamycin','Kanamycin',
++                     'Neomycin','Neomycin','Neomycin',
++                     'Puromycin',
++                     'Streptomycin','Streptomycin','Streptomycin',
++                     'Tobramycin','Tobramycin')
++       
++       Drug_Pubchem_ID<- c('3081545',
++                           '3467','3467','3467',
++                           '35766',
++                           '6032','6032','6032','6032','6032',
++                           '8378','8378','8378',
++                           '439530',
++                           '19649','19649','19649',
++                           '36294','36294')
++       
++       Resistance_gene_class<- c('Aminoglycoside modifying enzymes',
++                                 'Aminoglycoside modifying enzymes','Aminoglycoside modifying enzymes','Beta Lactamase',
++                                 'Aminoglycoside modifying enzymes',
++                                 'Efflux pump','Aminoglycoside modifying enzymes','Aminoglycoside modifying enzymes','Aminoglycoside modifying enzymes','Aminoglycoside modifying enzymes',
++                                 'Aminoglycoside modifying enzymes','Aminoglycoside modifying enzymes','Aminoglycoside modifying enzymes',
++                                 'Efflux pump',
++                                 'Aminoglycoside modifying enzymes','Aminoglycoside modifying enzymes','Aminoglycoside modifying enzymes',
++                                 'Aminoglycoside modifying enzymes','Aminoglycoside modifying enzymes')
++       
++       Resistance_genes_involved<- c('aac(3)-IV',
++                                     'aac(3)-IV','ant(2)-I (also known aadB)','CTX-M Beta-lactamases',
++                                     'APH(4)-Ia',
++                                     'MdfA','aac(3)-IV','ant(2)-I (also known aadB)','aph(3)-Ia','aph(3)-IIa',
++                                     'aac(3)-IV','aph(3)-Ia','aph(3)-IIa',
++                                     'MdfA',
++                                     'APH3 also known as strA','ant(3)-Ia (also known as aadA)','APH6 also known as strB',
++                                     'aac(3)-IV','ant(2)-I (also known aadB)')
++       
++       Bibliography<- c('PMID: 19501867',
++                        'PMID: 19501867','PMID: 21856840','PMID: 19402960',
++                        'PMID: 21084294',
++                        'PMID: 9079913','PMID: 19501867','PMID: 21856840','PMID: 14506033','PMID: 14506033',
++                        'PMID: 19501867','PMID: 14506033','PMID: 14506033',
++                        'PMID: 9079913',
++                        'PMID: 9988047','PMID: 21856840','PMID: 9988047',
++                        'PMID: 6374024','PMID: 21856840')
++       
++       Aminoglycoside<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     }
++     
++     #Rule for Nitrofurans
++     else if(nitrogen() !=0 && ring_nitrofuran_C() ==4){
++       Drug_Name<- 'Nitrofurantoin'
++       Drug_Pubchem_ID<- '6604200'
++       Resistance_gene_class<-'Plasmid mediated Efflux Pump'
++       Resistance_genes_involved<- 'oqxAB'
++       Bibliography<- 'PMID: 26552976'
++       Nitrofurantoin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++     } 
++     
++     
++     
++     
++     else 
++       "The drug is not found in the list! Please use Stochastic model"
++     
++   },escape = FALSE)
++   
++   #$$$$$$$$$$$$$$$$$$$$$$$$$$$ Drug-Gene classification Ends here $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$#	 
++   
++   #######################################################################
++   ######################## Export Tab ##################################
++   #######################################################################
++   
++   checkbox_Drug_Chemical<- reactive({
++     checkboxInput("Drug_Chemical_Properties", "Drug Chemical Properties", value = FALSE, width = NULL)
++     
++   })    
++   
++   checkbox_Drug_Atomic<- reactive({
++     checkboxInput("Drug_Atomic_Properties", "Drug Atomic Properties", value = FALSE, width = NULL)
++   }) 
++   
++   checkbox_Bond_Alttributes<- reactive({
++     checkboxInput("Bond_Attributes", "Bond Alttribute", value = FALSE, width = NULL)
++   })
++   
++   checkbox_Drug_Classification<- reactive({
++     checkboxInput("Drug_Classification", "Drug Classification", value = FALSE, width = NULL)
++   })
++   
++   checkbox_Nearest_drug<- reactive({
++     checkboxInput("Nearest_drugs", "Nearest drug/s", value = FALSE, width = NULL)
++   })
++   
++   checkbox_Resistance_Gene_List<- reactive({
++     checkboxInput("Resistance_Gene_List", "Resistance Gene List", value = FALSE, width = NULL)
++   })
++   
++   
++   
++   #######################################################################################################################
++   #######################################################################################################################
++   
++   ############################################### Export Functions ######################################################
++   
++   #######################################################################################################################
++   #######################################################################################################################
++   
++   
++   ######################################## View  and Download Files ###############################################
++   export_submit<- reactive({
++     actionButton("buttonuno","View Output")
++   })
++   
++   export_download<- reactive({
++     actionButton("buttondos","Create File")
++     
++   })
++   
++   
++   
++   values <- reactiveValues(uno =0, dos=0)
++   
++   observeEvent(input$buttonuno,
++                
++                {
++                  values$uno<-1
++                  values$dos<-0
++                })
++   
++   observeEvent(input$buttondos,
++                
++                {
++                  values$uno<-0
++                  values$dos<-1
++                })
++   
++   ###################################### View Files Ends Here ########################################
++   
++   
++   
++   
++   
++   # Creadting pdf and exporting output to pdf
++   
++   output$Chemical_Properties <- renderTable({
++     if(values$uno || values$dos){
++       
++       sink("www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt")
++       print(paste("*****************************************************"))
++       print(paste("User Information"))
++       print(paste("*****************************************************"))
++       proj<-input$projID
++       name<- input$name
++       email<- input$email
++       model<- input$model
++       
++       
++       print(paste("Project ID:",proj))
++       print(paste("Name of investigator:",name))
++       print(paste("Name of investigator:",email))
++       print(paste("Model Used:",model))
++       print(paste("################# End of User Information ##############"))
++       sink()
++     }
++     
++     else
++       return()  
++   })
++   
++   # Header for Molecular Formula and Molecular Weight 
++   output$header_mf_mw<- renderTable({    
++     if(values$uno || values$dos){
++       # Writing Chemical Property   
++       if(input$Drug_Chemical_Properties)
++       {
++         header_mf_mw<- "#### Molecular Formula and Molecular Weight ####"
++         write.table(header_mf_mw, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   })   
++   
++   ##################################
++   # Drug Chemical Properties Tab
++   ##################################
++   
++   output$chemical_attributes<- renderTable({    
++     if(values$uno || values$dos){
++       # Writing Chemical Property   
++       if(input$Drug_Chemical_Properties)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         data_chemical_property<-data.frame(MF=MF(read.SDFset(inFile$datapath)[[1]]), MW=MW(read.SDFset(inFile$datapath)[[1]]))
++         
++         write.table(data_chemical_property, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   })      
++   
++   
++   ##################################
++   # Drug Atomic Properties Tab
++   ##################################
++   
++   #Header for Atomic attribute
++   output$header_atomic_attributes<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Drug_Atomic_Properties)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         header_atomic_attributes<- "#### Atomic Block ####"
++         write.table(header_atomic_attributes, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   output$atomic_attributes<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Drug_Atomic_Properties)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         data_atomic_property<- atomblock(read.SDFset(inFile$datapath)[[1]])
++         write.table(data_atomic_property, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   })     
++   
++   #Header for Bond attribute
++   output$header_bond_attributes<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Drug_Atomic_Properties)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         header_bond_attributes<- "#### Bond Block ####"
++         write.table(header_bond_attributes, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   output$bond_attributes<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Drug_Atomic_Properties)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         bond_property<- bondblock(read.SDFset(inFile$datapath)[[1]])
++         write.table(bond_property, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   })  
++   
++   
++   
++   
++   ##################################
++   # Bond Attributes Tab
++   ##################################
++   
++   #Header for Ring Number
++   output$header_ring_attributes<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Bond_Attributes)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         header_ring_attributes<- "#### Total number of rings  ####"
++         write.table(header_ring_attributes, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   
++   #Total Ring Attribute
++   output$total_ring_number<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Bond_Attributes)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         total_ring_number<-   rings(read.SDFset(inFile$datapath)[[1]],type="count",upper=1000, arom=TRUE) 
++         write.table(total_ring_number, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = TRUE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   #Header for Ring Type
++   output$header_ring_type<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Bond_Attributes)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         header_ring_type<- "#### Ring Aromaticity  ####"
++         write.table(header_ring_type, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   
++   #Ring Aromaticity
++   output$ring_aromaticity<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Bond_Attributes)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         ring_type<-    rings(read.SDFset(inFile$datapath)[[1]], upper=Inf, type="all", arom=TRUE, inner=FALSE)  
++         write.table(ring_type[2], file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = TRUE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   
++   #Header for Ring Structure
++   output$header_ring_structure<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Bond_Attributes)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         header_ring_structure<- "#### Ring Structure  ####"
++         write.table(header_ring_structure, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   
++   #Ring Structure
++   output$ring_structure<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Bond_Attributes)
++       {
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         
++         rc <- rings(read.SDFset(inFile$datapath)[[1]], upper=Inf, type="all", arom=TRUE, inner=FALSE)  
++         rc_df<- c(rc$RINGS[seq(from= 1, to = length(rc$RINGS))])
++         rc_df <- as.character(rc_df)
++         rc_df[rc_df==""] <- "NA"
++         rc_df <- as.factor(rc_df)
++         write.table(rc_df, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = TRUE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   #Header for Bond Matrix
++   output$header_bond_matrix<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Bond_Attributes)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         header_bond_matrix<- "#### Bond Matrix  ####"
++         write.table(header_bond_matrix, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   
++   #Bond Matrix
++   output$bond_matrix<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Bond_Attributes)
++       {
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         
++         bond_matrix<- conMA(read.SDFset(inFile$datapath)[[1]], exclude=c("H"))
++         write.table(bond_matrix, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = TRUE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   ##################################
++   # Drug Classification Tab
++   ##################################
++   #Header for Drug Classification
++   output$header_drug_classification<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Drug_Classification)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         header_drug_classification<- "#### Drug Classification  ####"
++         write.table(header_drug_classification, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   
++   # Drug Classification for output
++   output$file_output_drug_classification = renderTable({
++     if(values$uno || values$dos){
++       if(input$Drug_Classification)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         ac <- atomcountMA(read.SDFset(inFile$datapath)[[1]], addH=FALSE) 
++         
++         ################################ 
++         #Extraction of Chemical features
++         ################################
++         
++         #Carbon Content
++         carbon <- reactive({
++           if (("C" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"C"]
++         })
++         
++         #Hydrogen Content
++         hydrogen <- reactive({
++           if (("H" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"H"]
++         })
++         
++         #Oxygen Content
++         oxygen <- reactive({
++           if (("O" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"O"]
++         })
++         
++         #Nitrogen Content
++         nitrogen <- reactive({
++           if (("N" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"N"]
++         })
++         
++         #Chlorine Content
++         chlorine <- reactive({
++           if (("Cl" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"Cl"]
++         })
++         
++         #Sulfur Content
++         sulfur <- reactive({
++           if (("S" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"S"]
++         })
++         
++         #Bromium Content
++         bromium <- reactive({
++           if (("Br" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"Br"]
++         })
++         
++         #Fluorine Content
++         fluorine <- reactive({
++           if (("F" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"F"]
++         })
++         
++         
++         ############################# 
++         # Extraction of Ring features
++         #############################
++         
++         
++         ro <- rings(read.SDFset(inFile$datapath)[[1]],type="count",upper=1000, arom=TRUE) 
++         rings <-  rings(read.SDFset(inFile$datapath)[[1]], upper=Inf, type="all", arom=TRUE, inner=FALSE) 
++         
++         #Quinolone condition
++         quin<- reactive({
++           aromatic_rings<- list()
++           aromatic_rings_final<- list()
++           
++           aliphatic_rings<- list()
++           aliphatic_rings_final<- list()
++           
++           intersect_rings<- list()
++           #intersect_rings_final<- list()
++           
++           
++           for(i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]==TRUE)
++             {
++               aromatic_rings<- rings$RINGS[i]
++               aromatic_rings_final<- rbind(aromatic_rings_final, aromatic_rings)
++               
++             }
++           }
++           
++           for(i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]==FALSE)
++             {
++               aliphatic_rings<- rings$RINGS[i]
++               aliphatic_rings_final<- rbind(aliphatic_rings_final, aliphatic_rings)
++               
++             }
++           }
++           
++           quin<-0 
++           for(i in 1:length(aromatic_rings_final))
++           {
++             for(j in 1:length(aromatic_rings_final))
++             {
++               intersect_rings<-Reduce(intersect, list(aromatic_rings_final[[i]], aromatic_rings_final[[j]]))
++               if(length(intersect_rings)==2)
++               {
++                 quin<-1
++               }
++             }
++           }
++           quin 
++           
++         })
++         
++         #Whether Aromatic ring is present or not
++         ring_p_or_a<- reactive({
++           for (i in 1: length(rings$AROMATIC)){
++             if(rings$AROMATIC[[i]]=='TRUE' )
++             {
++               
++               j<-1
++             }
++           }
++           j
++           
++         })
++         
++         #$Acquisition of conditions for sulfonamide
++         
++         sul_matrix<- reactive({
++           inFile <- input$file
++           if (is.null(inFile))
++             return(NULL)
++           
++           matrix<-  as.data.frame(conMA(read.SDFset(inFile$datapath)[[1]], exclude=c("H")))
++           rowname_sul <- row.names(matrix)
++           colname_sul <- colnames(matrix)
++           row_sul_elements<-  data.frame(strsplit(rowname_sul,"_"))[1,]
++           
++           #Acquisition of Sulfur indices
++           sul_index_S <- list() 
++           sul_index_current_S<- list()
++           
++           for(i in 1:length(row_sul_elements)){
++             if(row_sul_elements[i]== 'S')
++             {
++               sul_index_current_S <- i
++               sul_index_S <- rbind(sul_index_S,sul_index_current_S)
++             }
++             
++           }
++           
++           #Acquisition of Oxygen indices
++           sul_index_O <- list() 
++           sul_index_current_O<- list()
++           
++           for(i in 1:length(row_sul_elements)){
++             if(row_sul_elements[i]== 'O')
++             {
++               sul_index_current_O <- i
++               sul_index_O <- rbind(sul_index_O,sul_index_current_O)
++             }
++             
++           }
++           
++           output<- list()
++           output_final<- list()
++           for(i in 1: length(sul_index_S[,1]))
++           {
++             l<-0
++             for(j in 1: length(sul_index_O[,1]))
++             {
++               a<- sul_index_S[,1][i]
++               b<- sul_index_O[,1][j]
++               if(matrix[a$sul_index_current_S[1],b$sul_index_current_O]==2)
++               {
++                 l<-l+2
++               }
++               
++             }
++             output<- l
++             output_final<- rbind(output_final,output)
++           } 
++           
++           for(i in 1: length(output_final))
++           {
++             if(output_final[i]==4)
++             {
++               k<-4
++             }
++             
++           }
++           k
++           
++         })
++         
++         #Acquisition of Carbon number in the aromatic ring of nitrofurans
++         ring_nitrofuran_C<- reactive({
++           
++           top1<- list()
++           top1_0<- list()
++           for (i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]== TRUE)
++             {
++               X <- list(rings$RINGS[i])[[1]][[1]]
++               
++               if(length(X)==5){
++                 Y <- data.frame(strsplit(X,"_"))[1,]
++                 Z <- rowSums(Y == "C")
++                 J <- rowSums(Y== "O")
++                 
++                 output_O<- J[[1]]
++                 output_C<- Z[[1]]
++                 
++                 top<- as.data.frame(output_C)
++                 top_O<- as.data.frame(output_O)
++                 
++                 top1<- rbind(top1,top)
++                 top1_0<- rbind(top1_0, top_O)
++                 
++               }
++               
++             }
++           }
++           
++           for(j in 1: ncol(top1))
++           {
++             if(top1[j]== 4 && top1_0[j]==1)
++             {k<-4}                               
++           }
++           k 
++           
++         })
++         
++         
++         #Acquisition of Carbon content in aliphatic rings
++         ring_C<- reactive({
++           
++           top1<- list()
++           for (i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]== FALSE)
++             {
++               X <- list(rings$RINGS[i])[[1]][[1]]
++               Y <- data.frame(strsplit(X,"_"))[1,]
++               Z <- rowSums(Y == "C")
++               
++               output_C<- Z[[1]]
++               top<- as.data.frame(output_C)
++               top1<- rbind(top1,top)
++             }
++           }
++           for(j in 1: ncol(top1))
++           {
++             if(top1[j]== 3)
++             {k<-3}
++           }
++           k })
++         
++         
++         #Acquisition of Nitrogen content in aliphatic rings
++         ring_N<- reactive({
++           
++           top1_N<- list()
++           for (i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]== FALSE)
++             {
++               X <- list(rings$RINGS[i])[[1]][[1]]
++               Y <- data.frame(strsplit(X,"_"))[1,]
++               Z <- rowSums(Y == "N")
++               
++               output_N<- Z[[1]]
++               top_N<- as.data.frame(output_N)
++               top1_N<- rbind(top1_N,top_N)
++             }
++           }
++           for(j in 1: ncol(top1_N))
++           {
++             if(top1_N[j]== 1)
++             {k<-1}
++           }
++           k})
++         
++         #Total ring
++         total_ring <- reactive({
++           if(is.null(ro[1]))
++             return(NULL)
++           ro[1]
++         }) 
++         
++         #Aromatic ring
++         aromatic_ring <- reactive({
++           if(is.null(ro[2]))
++             return(NULL)
++           ro[2]
++         }) 	  
++         
++         
++         #$$$$$$$$$$$$$$$$$$$$$$$$$$$ Prediction Rules for Drug classification starts here $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$#	  
++         
++         #Rule for Acriflavine
++         if(carbon() ==27 && chlorine() ==1 && hydrogen() == 25 && nitrogen() == 6 && total_ring()==12 && aromatic_ring() ==12){
++           Acriflavine<- "The Drug is likely to be Acriflavine"
++           write.table(Acriflavine, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         } 
++         
++         #Rule for Aminocoumarin
++         else if(carbon() ==31 && hydrogen() == 36 && nitrogen()==2 && oxygen()==11 && total_ring()== 5 && aromatic_ring()==4)
++         {
++           Aminocoumarin<- "The Drug is likely to be Aminocoumarin"
++           write.table(Aminocoumarin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Anisole
++         else if (carbon()== 14 && hydrogen() == 18 && nitrogen() == 4 && oxygen() == 3 && total_ring() == aromatic_ring())
++         {
++           Anisole<-"The Drug is likely to be Anisole"
++           write.table(Anisole, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Anthracycline
++         else if(carbon() == 27 && hydrogen() >= 29 && oxygen() ==10  && nitrogen() ==1 && chlorine() ==0 && total_ring() ==11&& aromatic_ring() >=2 ){
++           Anthracycline<- "The Drug is likely to be Anthracycline"
++           write.table(Anthracycline, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Benzalkonium
++         else if(bromium()==1&& carbon() == 21 && hydrogen() >= 38 && oxygen() ==0  && nitrogen() ==1 && chlorine() ==0 && total_ring() ==1 && aromatic_ring() ==1 ){
++           Benzalkonium<- "The Drug is likely to be Benzalkonium"
++           write.table(Benzalkonium, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Chloramphenicol
++         else if(carbon() == 11 && hydrogen() == 12 && oxygen() ==5  && nitrogen() ==2 && chlorine() ==2 && total_ring() ==1 && aromatic_ring() ==1 ){
++           Chloramphenicol<- "The Drug is Chloramphenicol"
++           write.table(Chloramphenicol, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Florfenicol
++         else if(carbon() != 0 && hydrogen() != 0 && chlorine() !=0 && fluorine() !=0 && nitrogen() !=0 && oxygen() !=0 && sulfur() !=0    && total_ring() ==1 && aromatic_ring() ==1 ){
++           Florfenicol<- "The Drug is likely to be Florfenicol"
++           write.table(Florfenicol, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Rhodamine
++         else if(carbon() == 28 && hydrogen() == 31 && chlorine() ==1 && fluorine() ==0 && nitrogen() ==2 && oxygen() ==3 && sulfur() ==0    && total_ring() ==7 && aromatic_ring() ==7 ){
++           Rhodamine<-"The Drug is likely to be Rhodamine"
++           write.table(Rhodamine, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Thiolactomycin
++         else if(carbon() == 11 && hydrogen() == 14 && chlorine() ==0 && fluorine() ==0 && nitrogen() ==0 && oxygen() ==2 && sulfur() ==1    && total_ring() ==1 && aromatic_ring() ==0 ){
++           Thiolactomycin<- "The Drug is likely to be Thiolactomycin"
++           write.table(Thiolactomycin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Beta Lactam
++         else if(carbon() >= 12 && carbon() <=23 && hydrogen() >= 16 && hydrogen() <= 27 && oxygen() >=4 && oxygen() <=9 && nitrogen() >=2 && nitrogen() <=8 && sulfur() >=1 && sulfur() <=3 && ring_C() ==3 && ring_N()==1){
++           Beta_Lactam<- "The Drug is likely to be Beta Lactam"
++           write.table(Beta_Lactam, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Sulfonamide
++         else if(carbon() != 0 && hydrogen() != 0 && oxygen() != 0 && nitrogen() !=0 && sulfur() !=0 && sul_matrix() == 4 && ring_p_or_a() == 1){
++           Sulfonamide<- "The Drug is likely to be Sulfonamide"
++           write.table(Sulfonamide, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Fluoroquinolone
++         else if(carbon() != 0 && hydrogen() != 0 && oxygen() == 3 && nitrogen() ==3 && fluorine() !=0 && quin()==1){
++           Fluoroquinolone<- "The Drug is likely to be Fluoroquinolone"
++           write.table(Fluoroquinolone, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Erythromycin
++         else if(carbon() == 37 && hydrogen() == 67 && nitrogen() ==1 && oxygen() == 13 && fluorine() ==0){
++           Polyketide_Erythromycin<- "The Drug is likely to be Polyketide"
++           write.table(Polyketide_Erythromycin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Clarithromycin
++         else if(carbon() == 38 && hydrogen() == 69 && nitrogen() ==1 && oxygen() == 13 && fluorine() ==0){
++           Polyketide_Clarithromycin<- "The Drug is likely to be Polyketide"
++           write.table(Polyketide_Clarithromycin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Cethromycin
++         else if(carbon() == 42 && hydrogen() == 59 && nitrogen() ==3 && oxygen() == 10 && fluorine() ==0){
++           Polyketide_Cethromycin<- "The Drug is likely to be Polyketide"
++           write.table(Polyketide_Cethromycin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Telithromycin
++         else if(carbon() == 43 && hydrogen() == 65 && nitrogen() ==5 && oxygen() == 10 && fluorine() ==0){
++           Polyketide_Telithromycin<- "The Drug is likely to be Polyketide"
++           write.table(Polyketide_Telithromycin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Rifampin
++         else if(carbon() == 43 && hydrogen() == 58 && nitrogen() ==4 && oxygen() == 12 && fluorine() ==0){
++           Polyketide_Rifampin<- "The Drug is likely to be Polyketide"
++           write.table(Polyketide_Rifampin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Tetracycline
++         else if(carbon() == 22 && hydrogen() == 24 && nitrogen() == 2 && oxygen() == 8 && fluorine() ==0){
++           Polyketide_Tetracycline<- "The Drug is likely to be Polyketide"
++           write.table( Polyketide_Tetracycline, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Minocycline
++         else if(carbon() == 23 && hydrogen() == 27 && nitrogen() == 3 && oxygen() == 7 && fluorine() ==0){
++           Polyketide_Minocycline<- "The Drug is likely to be Polyketide"
++           write.table( Polyketide_Minocycline, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         
++         #Rule for Quinolone
++         else if(carbon() != 0 && hydrogen() != 0 && oxygen() == 3 && nitrogen() ==2 && fluorine() ==0&& quin()==1 ){
++           Quinolone<- "The Drug is likely to be Quinolone"
++           write.table(Quinolone, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Peptide drug Bicyclomycin (C12H18N2O7)
++         else if(carbon()==12 && hydrogen()==18 && nitrogen()==2 && oxygen()==7){
++           Peptide_drug_Bicyclomycin<- "The drug is likely to be Peptide drug"
++           write.table(Peptide_drug_Bicyclomycin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Peptide drug Polymyxin B (C56H100N16O17S)
++         else if(carbon()==56 && hydrogen()==98 && nitrogen()==16 && oxygen()==13){
++           Peptide_drug_Polymyxin_B <-"The drug is likely to be Peptide drug"
++           write.table(Peptide_drug_Polymyxin_B, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }	
++         
++         
++         #Rule for Aminoglycoside
++         else if(carbon() != 0 && hydrogen() >= 2 * oxygen() && nitrogen() !=0 && chlorine() ==0){
++           Aminoglycoside <- "The Drug is likely to be Aminoglycoside"
++           write.table(Aminoglycoside, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Nitrofurans
++         else if(nitrogen() !=0 && ring_nitrofuran_C() ==4){
++           Nitrofurans<- "The Drug is likely to be Nitrofuran"
++           write.table(Nitrofurans, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         } 
++         
++         
++         
++         
++         
++         #Rule for Peptide drug
++         #Rule for Polyketide
++         
++         
++         else 
++           "The drug is not found in the list! Please use Stochastic model"
++       }}
++   }, rownames = FALSE, colnames = FALSE, 
++   include.rownames=FALSE)
++   
++   
++   ##################################
++   # Drug Neighbors Tab
++   ##################################
++   #Header for Drug Classification
++   output$header_drug_neighbors<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Nearest_drugs)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         header_drug_neighbors<- "#### Drug Nearest Neighbors  ####"
++         write.table(header_drug_neighbors, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   
++   #Drug Nearest Neighbor output to the file
++   
++   output$file_output_nearest_neighbors = renderTable({
++     if(values$uno || values$dos){
++       if(input$Nearest_drugs)
++       {
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         ac <- atomcountMA(read.SDFset(inFile$datapath)[[1]], addH=FALSE) 
++         
++         ################################ 
++         #Extraction of Chemical features
++         ################################
++         
++         #Carbon Content
++         carbon <- reactive({
++           if (("C" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"C"]
++         })
++         
++         #Hydrogen Content
++         hydrogen <- reactive({
++           if (("H" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"H"]
++         })
++         
++         #Oxygen Content
++         oxygen <- reactive({
++           if (("O" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"O"]
++         })
++         
++         #Nitrogen Content
++         nitrogen <- reactive({
++           if (("N" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"N"]
++         })
++         
++         #Chlorine Content
++         chlorine <- reactive({
++           if (("Cl" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"Cl"]
++         })
++         
++         #Sulfur Content
++         sulfur <- reactive({
++           if (("S" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"S"]
++         })
++         
++         #Bromium Content
++         bromium <- reactive({
++           if (("Br" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"Br"]
++         })
++         
++         #Fluorine Content
++         fluorine <- reactive({
++           if (("F" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"F"]
++         })
++         
++         
++         ############################# 
++         # Extraction of Ring features
++         #############################
++         
++         
++         ro <- rings(read.SDFset(inFile$datapath)[[1]],type="count",upper=1000, arom=TRUE) 
++         rings <-  rings(read.SDFset(inFile$datapath)[[1]], upper=Inf, type="all", arom=TRUE, inner=FALSE) 
++         
++         #Quinolone condition
++         quin<- reactive({
++           aromatic_rings<- list()
++           aromatic_rings_final<- list()
++           
++           aliphatic_rings<- list()
++           aliphatic_rings_final<- list()
++           
++           intersect_rings<- list()
++           #intersect_rings_final<- list()
++           
++           
++           for(i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]==TRUE)
++             {
++               aromatic_rings<- rings$RINGS[i]
++               aromatic_rings_final<- rbind(aromatic_rings_final, aromatic_rings)
++               
++             }
++           }
++           
++           for(i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]==FALSE)
++             {
++               aliphatic_rings<- rings$RINGS[i]
++               aliphatic_rings_final<- rbind(aliphatic_rings_final, aliphatic_rings)
++               
++             }
++           }
++           
++           quin<-0 
++           for(i in 1:length(aromatic_rings_final))
++           {
++             for(j in 1:length(aromatic_rings_final))
++             {
++               intersect_rings<-Reduce(intersect, list(aromatic_rings_final[[i]], aromatic_rings_final[[j]]))
++               if(length(intersect_rings)==2)
++               {
++                 quin<-1
++               }
++             }
++           }
++           quin 
++           
++         })
++         
++         #Whether Aromatic ring is present or not
++         ring_p_or_a<- reactive({
++           for (i in 1: length(rings$AROMATIC)){
++             if(rings$AROMATIC[[i]]=='TRUE' )
++             {
++               
++               j<-1
++             }
++           }
++           j
++           
++         })
++         
++         #$Acquisition of conditions for sulfonamide
++         
++         sul_matrix<- reactive({
++           inFile <- input$file
++           if (is.null(inFile))
++             return(NULL)
++           
++           matrix<-  as.data.frame(conMA(read.SDFset(inFile$datapath)[[1]], exclude=c("H")))
++           rowname_sul <- row.names(matrix)
++           colname_sul <- colnames(matrix)
++           row_sul_elements<-  data.frame(strsplit(rowname_sul,"_"))[1,]
++           
++           #Acquisition of Sulfur indices
++           sul_index_S <- list() 
++           sul_index_current_S<- list()
++           
++           for(i in 1:length(row_sul_elements)){
++             if(row_sul_elements[i]== 'S')
++             {
++               sul_index_current_S <- i
++               sul_index_S <- rbind(sul_index_S,sul_index_current_S)
++             }
++             
++           }
++           
++           #Acquisition of Oxygen indices
++           sul_index_O <- list() 
++           sul_index_current_O<- list()
++           
++           for(i in 1:length(row_sul_elements)){
++             if(row_sul_elements[i]== 'O')
++             {
++               sul_index_current_O <- i
++               sul_index_O <- rbind(sul_index_O,sul_index_current_O)
++             }
++             
++           }
++           
++           output<- list()
++           output_final<- list()
++           for(i in 1: length(sul_index_S[,1]))
++           {
++             l<-0
++             for(j in 1: length(sul_index_O[,1]))
++             {
++               a<- sul_index_S[,1][i]
++               b<- sul_index_O[,1][j]
++               if(matrix[a$sul_index_current_S[1],b$sul_index_current_O]==2)
++               {
++                 l<-l+2
++               }
++               
++             }
++             output<- l
++             output_final<- rbind(output_final,output)
++           } 
++           
++           for(i in 1: length(output_final))
++           {
++             if(output_final[i]==4)
++             {
++               k<-4
++             }
++             
++           }
++           k
++           
++         })
++         
++         #Acquisition of Carbon number in the aromatic ring of nitrofurans
++         ring_nitrofuran_C<- reactive({
++           
++           top1<- list()
++           top1_0<- list()
++           for (i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]== TRUE)
++             {
++               X <- list(rings$RINGS[i])[[1]][[1]]
++               
++               if(length(X)==5){
++                 Y <- data.frame(strsplit(X,"_"))[1,]
++                 Z <- rowSums(Y == "C")
++                 J <- rowSums(Y== "O")
++                 
++                 output_O<- J[[1]]
++                 output_C<- Z[[1]]
++                 
++                 top<- as.data.frame(output_C)
++                 top_O<- as.data.frame(output_O)
++                 
++                 top1<- rbind(top1,top)
++                 top1_0<- rbind(top1_0, top_O)
++                 
++               }
++               
++             }
++           }
++           
++           for(j in 1: ncol(top1))
++           {
++             if(top1[j]== 4 && top1_0[j]==1)
++             {k<-4}                               
++           }
++           k 
++           
++         })
++         
++         
++         #Acquisition of Carbon content in aliphatic rings
++         ring_C<- reactive({
++           
++           top1<- list()
++           for (i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]== FALSE)
++             {
++               X <- list(rings$RINGS[i])[[1]][[1]]
++               Y <- data.frame(strsplit(X,"_"))[1,]
++               Z <- rowSums(Y == "C")
++               
++               output_C<- Z[[1]]
++               top<- as.data.frame(output_C)
++               top1<- rbind(top1,top)
++             }
++           }
++           for(j in 1: ncol(top1))
++           {
++             if(top1[j]== 3)
++             {k<-3}
++           }
++           k })
++         
++         
++         #Acquisition of Nitrogen content in aliphatic rings
++         ring_N<- reactive({
++           
++           top1_N<- list()
++           for (i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]== FALSE)
++             {
++               X <- list(rings$RINGS[i])[[1]][[1]]
++               Y <- data.frame(strsplit(X,"_"))[1,]
++               Z <- rowSums(Y == "N")
++               
++               output_N<- Z[[1]]
++               top_N<- as.data.frame(output_N)
++               top1_N<- rbind(top1_N,top_N)
++             }
++           }
++           for(j in 1: ncol(top1_N))
++           {
++             if(top1_N[j]== 1)
++             {k<-1}
++           }
++           k})
++         
++         #Total ring
++         total_ring <- reactive({
++           if(is.null(ro[1]))
++             return(NULL)
++           ro[1]
++         }) 
++         
++         #Aromatic ring
++         aromatic_ring <- reactive({
++           if(is.null(ro[2]))
++             return(NULL)
++           ro[2]
++         }) 	  
++         
++         
++         #$$$$$$$$$$$$$$$$$$$$$$$$$$$ Prediction Rules for Drug classification starts here $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$#	  
++         
++         #Rule for Acriflavine
++         if(carbon() ==27 && chlorine() ==1 && hydrogen() == 25 && nitrogen() == 6 && total_ring()==12 && aromatic_ring() ==12){
++           Drug_Name<- 'Acriflavine'
++           PubChem_ID<- '443101'
++           acriflavine<- data.frame(Drug_Name,PubChem_ID)
++           write.table(acriflavine, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         } 
++         
++         #Rule for Aminocoumarin
++         else if(carbon() ==31 && hydrogen() == 36 && nitrogen()==2 && oxygen()==11 && total_ring()== 5 && aromatic_ring()==4)
++         {
++           Drug_Name<- 'Aminocoumarin'
++           PubChem_ID<- '54675769'
++           Aminocoumarin<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Aminocoumarin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Anisole
++         else if (carbon()== 14 && hydrogen() == 18 && nitrogen() == 4 && oxygen() == 3 && total_ring() == aromatic_ring())
++         {
++           Drug_Name<- 'Anisole'
++           PubChem_ID<- '5578'
++           Anisole<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Anisole, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Anthracycline
++         else if(carbon() == 27 && hydrogen() >= 29 && oxygen() ==10  && nitrogen() ==1 && chlorine() ==0 && total_ring() ==11&& aromatic_ring() >=2 ){
++           Drug_Name<- 'Anthracycline'
++           PubChem_ID<- '30323'
++           Anthracycline<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Anthracycline, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Benzalkonium
++         else if(bromium()==1&& carbon() == 21 && hydrogen() >= 38 && oxygen() ==0  && nitrogen() ==1 && chlorine() ==0 && total_ring() ==1 && aromatic_ring() ==1 ){
++           Drug_Name<- 'Benzalkonium'
++           PubChem_ID<- '23705'
++           Benzalkonium<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Benzalkonium, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Chloramphenicol
++         else if(carbon() == 11 && hydrogen() == 12 && oxygen() ==5  && nitrogen() ==2 && chlorine() ==2 && total_ring() ==1 && aromatic_ring() ==1 ){
++           Drug_Name<- 'Chloramphenicol'
++           PubChem_ID<- '5959'
++           Chloramphenicol<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Chloramphenicol, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Florfenicol
++         else if(carbon() != 0 && hydrogen() != 0 && chlorine() !=0 && fluorine() !=0 && nitrogen() !=0 && oxygen() !=0 && sulfur() !=0    && total_ring() ==1 && aromatic_ring() ==1 ){
++           Drug_Name<- 'Florfenicol'
++           PubChem_ID<- '114811'
++           Florfenicol<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Florfenicol, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         
++         #Rule for Rhodamine
++         else if(carbon() == 28 && hydrogen() == 31 && chlorine() ==1 && fluorine() ==0 && nitrogen() ==2 && oxygen() ==3 && sulfur() ==0    && total_ring() ==7 && aromatic_ring() ==7 ){
++           Drug_Name<- 'Rhodamine'
++           PubChem_ID<- '6694'
++           Rhodamine<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Rhodamine, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Thiolactomycin
++         else if(carbon() == 11 && hydrogen() == 14 && chlorine() ==0 && fluorine() ==0 && nitrogen() ==0 && oxygen() ==2 && sulfur() ==1    && total_ring() ==1 && aromatic_ring() ==0 ){
++           Drug_Name<- 'Thiolactomycin'
++           PubChem_ID<- '445629'
++           Thiolactomycin<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Thiolactomycin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Beta Lactam
++         else if(carbon() >= 12 && carbon() <=23 && hydrogen() >= 16 && hydrogen() <= 27 && oxygen() >=4 && oxygen() <=9 && nitrogen() >=2 && nitrogen() <=8 && sulfur() >=1 && sulfur() <=3 && ring_C() ==3 && ring_N()==1){
++           Drug_Name<- c('Amoxicillin','Ampicillin','Aztreonam','Cefalotin','Cefepime',
++                         'Cefoselis','Cefotaxime','Cefoxitin','Cefpirome','Ceftazidime',
++                         'Cefradine','Cefuroxime','Ceftriaxone','Ceftiofur','Ertapenem',
++                         'Imipenem','Meropenem','Moxalactam','Penicillin G','Piperacillin',
++                         'Ticarcillin'
++           )
++           PubChem_ID<- c('33613','6249','5742832','6024','5479537','5748845','5742673','441199',
++                          '5479539','5481173','38103','5479529','5479530','6328657','150610','104838','441130',
++                          '47499','5904','43672','36921')
++           Beta_Lactam<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Beta_Lactam, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Sulfonamide
++         else if(carbon() != 0 && hydrogen() != 0 && oxygen() != 0 && nitrogen() !=0 && sulfur() !=0 && sul_matrix() == 4 && ring_p_or_a() == 1){
++           Drug_Name<- c('Sulfadiazine','Sulfamethoxazole')
++           PubChem_ID<- c('5215','5329')
++           Sulfonamide<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Sulfonamide, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++           
++         }
++         
++         #Rule for Fluoroquinolone
++         else if(carbon() != 0 && hydrogen() != 0 && oxygen() == 3 && nitrogen() ==3 && fluorine() !=0 && quin()==1){
++           Drug_Name<- c('Ciprofloxacin','Sitafloxacin','Norfloxacin')
++           PubChem_ID<- c('2764','461399','4539')
++           Fluoroquinolone<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Fluoroquinolone, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++           
++         }
++         
++         #Rule for Quinolone
++         else if(carbon() != 0 && hydrogen() != 0 && oxygen() == 3 && nitrogen() ==2 && fluorine() ==0&& quin()==1 ){
++           Drug_Name<- 'Quinolone'
++           PubChem_ID<- '4421'
++           Quinolone<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Quinolone, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         
++         
++         #Rule for Polyketide_Erythromycin
++         else if(carbon() == 37 && hydrogen() == 67 && nitrogen() ==1 && oxygen() == 13 && fluorine() ==0){
++           Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++           PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++           Polyketide_Erythromycin<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Polyketide_Erythromycin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Clarithromycin
++         else if(carbon() == 38 && hydrogen() == 69 && nitrogen() ==1 && oxygen() == 13 && fluorine() ==0){
++           Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++           PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++           Polyketide_Clarithromycin<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Polyketide_Clarithromycin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Cethromycin
++         else if(carbon() == 42 && hydrogen() == 59 && nitrogen() ==3 && oxygen() == 10 && fluorine() ==0){
++           Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++           PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++           Polyketide_Cethromycin<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Polyketide_Cethromycin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Telithromycin
++         else if(carbon() == 43 && hydrogen() == 65 && nitrogen() ==5 && oxygen() == 10 && fluorine() ==0){
++           Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++           PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++           Polyketide_Telithromycin<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Polyketide_Telithromycin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Rifampin
++         else if(carbon() == 43 && hydrogen() == 58 && nitrogen() ==4 && oxygen() == 12 && fluorine() ==0){
++           Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++           PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++           Polyketide_Rifampin<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Polyketide_Rifampin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Tetracycline
++         else if(carbon() == 22 && hydrogen() == 24 && nitrogen() == 2 && oxygen() == 8 && fluorine() ==0){
++           Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++           PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++           Polyketide_Tetracycline<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Polyketide_Tetracycline, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Polyketide_Minocycline
++         else if(carbon() == 23 && hydrogen() == 27 && nitrogen() == 3 && oxygen() == 7 && fluorine() ==0){
++           Drug_Name<- c('Erythromycin','Clarithromycin','Cethromycin','Telithromycin','Rifampin','Tetracycline','Minocycline')
++           PubChem_ID<- c('12560','84029','447451','3002190','5381226','54675776','54675783')
++           Polyketide_Minocycline<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Polyketide_Minocycline, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Peptide drug Bicyclomycin (C12H18N2O7)
++         else if(carbon()==12 && hydrogen()==18 && nitrogen()==2 && oxygen()==7){
++           Drug_Name<- c('Bicyclomycin','Polymyxin B')
++           PubChem_ID<- c('426058','49800004')
++           Peptide_drug_Bicyclomycin<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Peptide_drug_Bicyclomycin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Peptide drug Polymyxin B (C56H100N16O17S)
++         else if(carbon()==56 && hydrogen()==98 && nitrogen()==16 && oxygen()==13){
++           Drug_Name<- c('Bicyclomycin','Polymyxin B')
++           PubChem_ID<- c('426058','49800004')
++           Peptide_drug_Polymyxin_B<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Peptide_drug_Polymyxin_B, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }	
++         
++         
++         
++         #Rule for Aminoglycoside
++         else if(carbon() != 0 && hydrogen() >= 2 * oxygen() && nitrogen() !=0 && chlorine() ==0){
++           Drug_Name<- c('Apramycin','Gentamicin','Hygromycin B','Kanamycin','Neomycin','Puromycin','Streptomycin','Tobramycin')
++           PubChem_ID<- c('3081545','3467','35766','6032','8378','439530','19649','36294')
++           Aminoglycoside<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Aminoglycoside, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Nitrofurans
++         else if(nitrogen() !=0 && ring_nitrofuran_C() ==4){
++           Drug_Name<- 'Nitrofurantoin'
++           PubChem_ID<- '6604200'
++           Nitrofurans<- data.frame(Drug_Name,PubChem_ID)
++           write.table(Nitrofurans, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         } 
++         
++         
++         
++         
++         
++         #Rule for Peptide drug
++         #Rule for Polyketide
++         
++         
++         else 
++           "The drug is not found in the list! Please use Stochastic model"
++       }} 
++   }, 
++   include.rownames=FALSE)
++   
++   
++   #####################################
++   # Resistance Genes Tab
++   #####################################
++   #Header for Resistance Gene List
++   output$header_resistance_genes<- renderTable({ 
++     if(values$uno || values$dos){
++       if(input$Resistance_Gene_List)
++       {
++         
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         header_resistance_genes<- "#### Resistance Causing Genes  ####"
++         write.table(header_resistance_genes, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++       }
++       else{
++         return()
++       }
++     }
++   }) 
++   
++   #Resistance_genes
++   
++   output$file_output_resistance_genes = renderTable({
++     if(values$uno || values$dos){
++       if(input$Resistance_Gene_List)
++       {
++         inFile <- input$file
++         if (is.null(inFile))
++           return(NULL)
++         ac <- atomcountMA(read.SDFset(inFile$datapath)[[1]], addH=FALSE) 
++         
++         ################################ 
++         #Extraction of Chemical features
++         ################################
++         
++         #Carbon Content
++         carbon <- reactive({
++           if (("C" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"C"]
++         })
++         
++         #Hydrogen Content
++         hydrogen <- reactive({
++           if (("H" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"H"]
++         })
++         
++         #Oxygen Content
++         oxygen <- reactive({
++           if (("O" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"O"]
++         })
++         
++         #Nitrogen Content
++         nitrogen <- reactive({
++           if (("N" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"N"]
++         })
++         
++         #Chlorine Content
++         chlorine <- reactive({
++           if (("Cl" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"Cl"]
++         })
++         
++         #Sulfur Content
++         sulfur <- reactive({
++           if (("S" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"S"]
++         })
++         
++         #Bromium Content
++         bromium <- reactive({
++           if (("Br" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"Br"]
++         })
++         
++         #Fluorine Content
++         fluorine <- reactive({
++           if (("F" %in% colnames(ac)) == FALSE)
++             return(0)
++           ac[,"F"]
++         })
++         
++         
++         ############################# 
++         # Extraction of Ring features
++         #############################
++         
++         
++         ro <- rings(read.SDFset(inFile$datapath)[[1]],type="count",upper=1000, arom=TRUE) 
++         rings <-  rings(read.SDFset(inFile$datapath)[[1]], upper=Inf, type="all", arom=TRUE, inner=FALSE) 
++         
++         #Quinolone condition
++         quin<- reactive({ # Two aromatic rings joined together on two points
++           aromatic_rings<- list()
++           aromatic_rings_final<- list()
++           
++           aliphatic_rings<- list()
++           aliphatic_rings_final<- list()
++           
++           intersect_rings<- list()
++           #intersect_rings_final<- list()
++           
++           
++           for(i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]==TRUE)
++             {
++               aromatic_rings<- rings$RINGS[i]
++               aromatic_rings_final<- rbind(aromatic_rings_final, aromatic_rings)
++               
++             }
++           }
++           
++           for(i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]==FALSE)
++             {
++               aliphatic_rings<- rings$RINGS[i]
++               aliphatic_rings_final<- rbind(aliphatic_rings_final, aliphatic_rings)
++               
++             }
++           }
++           
++           quin<-0 
++           for(i in 1:length(aromatic_rings_final))
++           {
++             for(j in 1:length(aromatic_rings_final))
++             {
++               intersect_rings<-Reduce(intersect, list(aromatic_rings_final[[i]], aromatic_rings_final[[j]]))
++               if(length(intersect_rings)==2)
++               {
++                 quin<-1
++               }
++             }
++           }
++           quin 
++           
++         })
++         
++         #Whether Aromatic ring is present or not
++         ring_p_or_a<- reactive({
++           for (i in 1: length(rings$AROMATIC)){
++             if(rings$AROMATIC[[i]]=='TRUE' )
++             {
++               
++               j<-1
++             }
++           }
++           j
++           
++         })
++         
++         #$Acquisition of conditions for sulfonamide
++         
++         sul_matrix<- reactive({
++           inFile <- input$file
++           if (is.null(inFile))
++             return(NULL)
++           
++           matrix<-  as.data.frame(conMA(read.SDFset(inFile$datapath)[[1]], exclude=c("H")))
++           rowname_sul <- row.names(matrix)
++           colname_sul <- colnames(matrix)
++           row_sul_elements<-  data.frame(strsplit(rowname_sul,"_"))[1,]
++           
++           #Acquisition of Sulfur indices
++           sul_index_S <- list() 
++           sul_index_current_S<- list()
++           
++           for(i in 1:length(row_sul_elements)){
++             if(row_sul_elements[i]== 'S')
++             {
++               sul_index_current_S <- i
++               sul_index_S <- rbind(sul_index_S,sul_index_current_S)
++             }
++             
++           }
++           
++           #Acquisition of Oxygen indices
++           sul_index_O <- list() 
++           sul_index_current_O<- list()
++           
++           for(i in 1:length(row_sul_elements)){
++             if(row_sul_elements[i]== 'O')
++             {
++               sul_index_current_O <- i
++               sul_index_O <- rbind(sul_index_O,sul_index_current_O)
++             }
++             
++           }
++           
++           output<- list()
++           output_final<- list()
++           for(i in 1: length(sul_index_S[,1]))
++           {
++             l<-0
++             for(j in 1: length(sul_index_O[,1]))
++             {
++               a<- sul_index_S[,1][i]
++               b<- sul_index_O[,1][j]
++               if(matrix[a$sul_index_current_S[1],b$sul_index_current_O]==2)
++               {
++                 l<-l+2
++               }
++               
++             }
++             output<- l
++             output_final<- rbind(output_final,output)
++           } 
++           
++           for(i in 1: length(output_final))
++           {
++             if(output_final[i]==4)
++             {
++               k<-4
++             }
++             
++           }
++           k
++           
++         })
++         
++         #Acquisition of Carbon number in the aromatic ring of nitrofurans
++         ring_nitrofuran_C<- reactive({
++           
++           top1<- list()
++           top1_0<- list()
++           for (i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]== TRUE)
++             {
++               X <- list(rings$RINGS[i])[[1]][[1]]
++               
++               if(length(X)==5){
++                 Y <- data.frame(strsplit(X,"_"))[1,]
++                 Z <- rowSums(Y == "C")
++                 J <- rowSums(Y== "O")
++                 
++                 output_O<- J[[1]]
++                 output_C<- Z[[1]]
++                 
++                 top<- as.data.frame(output_C)
++                 top_O<- as.data.frame(output_O)
++                 
++                 top1<- rbind(top1,top)
++                 top1_0<- rbind(top1_0, top_O)
++                 
++               }
++               
++             }
++           }
++           
++           for(j in 1: ncol(top1))
++           {
++             if(top1[j]== 4 && top1_0[j]==1)
++             {k<-4}                               
++           }
++           k 
++           
++         })
++         
++         
++         #Acquisition of Carbon content in aliphatic rings
++         ring_C<- reactive({
++           
++           top1<- list()
++           for (i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]== FALSE)
++             {
++               X <- list(rings$RINGS[i])[[1]][[1]]
++               Y <- data.frame(strsplit(X,"_"))[1,]
++               Z <- rowSums(Y == "C")
++               
++               output_C<- Z[[1]]
++               top<- as.data.frame(output_C)
++               top1<- rbind(top1,top)
++             }
++           }
++           for(j in 1: ncol(top1))
++           {
++             if(top1[j]== 3)
++             {k<-3}
++           }
++           k })
++         
++         
++         #Acquisition of Nitrogen content in aliphatic rings
++         ring_N<- reactive({
++           
++           top1_N<- list()
++           for (i in 1:length(rings$AROMATIC))
++           {
++             if(rings$AROMATIC[i]== FALSE)
++             {
++               X <- list(rings$RINGS[i])[[1]][[1]]
++               Y <- data.frame(strsplit(X,"_"))[1,]
++               Z <- rowSums(Y == "N")
++               
++               output_N<- Z[[1]]
++               top_N<- as.data.frame(output_N)
++               top1_N<- rbind(top1_N,top_N)
++             }
++           }
++           for(j in 1: ncol(top1_N))
++           {
++             if(top1_N[j]== 1)
++             {k<-1}
++           }
++           k})
++         
++         #Total ring
++         total_ring <- reactive({
++           if(is.null(ro[1]))
++             return(NULL)
++           ro[1]
++         }) 
++         
++         #Aromatic ring
++         aromatic_ring <- reactive({
++           if(is.null(ro[2]))
++             return(NULL)
++           ro[2]
++         }) 	  
++         
++         ##########################################################################################################
++         ##########################################################################################################
++         ##########################################################################################################
++         ################################# Genes causing resistance ###############################################
++         ##########################################################################################################
++         ##########################################################################################################
++         ##########################################################################################################
++         
++         
++         
++         
++         #$$$$$$$$$$$$$$$$$$$$$$$$$$$  Drug - Gene classification starts here $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$#	  
++         
++         #Rule for Acriflavine
++         if(carbon() ==27 && chlorine() ==1 && hydrogen() == 25 && nitrogen() == 6 && total_ring()==12 && aromatic_ring() ==12){
++           Drug_Name<- 'Acriflavine'
++           Drug_Pubchem_ID<- '443101'
++           Resistance_gene_class<-'Two Component system'
++           Resistance_genes_involved<- 'AcrAB-Tolc system'
++           Bibliography<- 'PMID: 24043404'
++           acriflavine<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++           write.table(acriflavine, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         } 
++         
++         #Rule for Aminocoumarin
++         else if(carbon() ==31 && hydrogen() == 36 && nitrogen()==2 && oxygen()==11 && total_ring()== 5 && aromatic_ring()==4)
++         {
++           Drug_Name<- 'Novobiocin'
++           Drug_Pubchem_ID<- '54675769'
++           Resistance_gene_class<-'Response regulator which stimulate multidrug transporter ABC expression'
++           Resistance_genes_involved<- 'BaeR'
++           Bibliography<- 'PMID: 12107133'
++           Aminocoumarin<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++           write.table(Aminocoumarin, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Anisole
++         else if (carbon()== 14 && hydrogen() == 18 && nitrogen() == 4 && oxygen() == 3 && total_ring() == aromatic_ring())
++         {
++           Drug_Name<- c('Trimethoprim','Trimethoprim','Trimethoprim','Trimethoprim','Trimethoprim','Trimethoprim','Trimethoprim','Trimethoprim')
++           Drug_Pubchem_ID<- c('5578','5578','5578','5578','5578','5578','5578','5578')
++           Resistance_gene_class<-'Modification of enzyme Dihydrofolate reductase'
++           Resistance_genes_involved<- c('dfrA1','dfrA9','dfrA12','dfrA13','dfr7',
++                                         'dfr17','dhfrV','dhfrXIII')
++           Bibliography<- c('PMID: 20374640','PMID: 20374640','PMID: 20374640','PMID: 20374640',
++                            'PMID: 20374640','PMID: 20374640','PMID: 14506033','PMID: 14506033')
++           Anisole<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++           write.table(Anisole, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
++         
++         #Rule for Anthracycline
++         else if(carbon() == 27 && hydrogen() >= 29 && oxygen() ==10  && nitrogen() ==1 && chlorine() ==0 && total_ring() ==11&& aromatic_ring() >=2 ){
++           Drug_Name<- 'Daunomycin'
++           Drug_Pubchem_ID<- '30323'
++           Resistance_gene_class<-'Efflux pump'
++           Resistance_genes_involved<- 'MdfA'
++           Bibliography<- 'PMID: 9079913'
++           Anthracycline<- data.frame(Drug_Name,Drug_Pubchem_ID, Resistance_gene_class,Resistance_genes_involved, Bibliography)
++           write.table(Anthracycline, file = 'www/uCARE.Chem.Suit.Version.0.1.Chemical.Properties.Output.txt', row.names = FALSE, append = T)
++         }
+
+Execution halted
